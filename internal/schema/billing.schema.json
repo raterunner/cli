@@ -1,0 +1,294 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raterunner.io/schemas/billing",
+  "title": "Billing Configuration Schema",
+  "description": "Universal billing configuration. Provider IDs stored separately per environment.",
+  "type": "object",
+  "required": ["version", "plans"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "const": 1 },
+
+    "settings": { "$ref": "#/$defs/Settings" },
+    "entitlements": { "$ref": "#/$defs/EntitlementDefinitions" },
+    "plans": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Plan" },
+      "minItems": 1
+    },
+    "addons": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Addon" }
+    },
+    "promotions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Promotion" }
+    }
+  },
+
+  "$defs": {
+    "Settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "currency": { "$ref": "#/$defs/Currency" },
+        "trial_days": { "type": "integer", "minimum": 0, "default": 0 },
+        "grace_days": { "type": "integer", "minimum": 0, "default": 7 }
+      }
+    },
+
+    "EntitlementDefinitions": {
+      "type": "object",
+      "description": "Define available limits. Keys are used in plan.limits.",
+      "additionalProperties": { "$ref": "#/$defs/EntitlementDef" }
+    },
+
+    "EntitlementDef": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "enum": ["int", "bool", "rate"] },
+        "unit": { "type": "string" },
+        "description": { "type": "string" }
+      }
+    },
+
+    "Plan": {
+      "type": "object",
+      "required": ["id", "name", "prices"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "description": "Unique identifier (snake_case)"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "description": "Plan version for grandfathering existing subscribers"
+        },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "headline": { "type": "string", "description": "Short tagline for pricing page" },
+        "type": { "enum": ["personal", "team", "enterprise"] },
+        "public": { "type": "boolean", "default": true },
+        "default": { "type": "boolean", "default": false },
+        "trial_days": { "type": "integer", "minimum": 0 },
+        "prices": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/Price" },
+          "propertyNames": { "enum": ["monthly", "quarterly", "yearly"] }
+        },
+        "limits": { "$ref": "#/$defs/Limits" },
+        "features": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Marketing bullet points for pricing page"
+        },
+        "upgrades_to": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Plan IDs this plan can upgrade to"
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+
+    "Price": {
+      "oneOf": [
+        { "$ref": "#/$defs/FlatPrice" },
+        { "$ref": "#/$defs/PerUnitPrice" },
+        { "$ref": "#/$defs/TieredPrice" }
+      ]
+    },
+
+    "FlatPrice": {
+      "type": "object",
+      "required": ["amount"],
+      "additionalProperties": false,
+      "properties": {
+        "amount": { "$ref": "#/$defs/Money" },
+        "currency_prices": { "$ref": "#/$defs/CurrencyPrices" }
+      }
+    },
+
+    "PerUnitPrice": {
+      "type": "object",
+      "required": ["per_unit"],
+      "additionalProperties": false,
+      "properties": {
+        "per_unit": { "$ref": "#/$defs/Money" },
+        "unit": { "type": "string" },
+        "min": { "type": "integer", "minimum": 1 },
+        "max": { "type": "integer", "minimum": 1 },
+        "included": { "type": "integer", "minimum": 0, "default": 0 },
+        "currency_prices": { "$ref": "#/$defs/CurrencyPrices" }
+      }
+    },
+
+    "TieredPrice": {
+      "type": "object",
+      "required": ["tiers"],
+      "additionalProperties": false,
+      "properties": {
+        "tiers": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Tier" },
+          "minItems": 1
+        },
+        "mode": {
+          "enum": ["graduated", "volume"],
+          "default": "graduated"
+        },
+        "unit": { "type": "string" }
+      }
+    },
+
+    "Tier": {
+      "type": "object",
+      "required": ["up_to"],
+      "additionalProperties": false,
+      "properties": {
+        "up_to": {
+          "oneOf": [
+            { "type": "integer", "minimum": 1 },
+            { "const": "unlimited" }
+          ]
+        },
+        "amount": { "$ref": "#/$defs/Money" },
+        "flat": { "$ref": "#/$defs/Money" }
+      }
+    },
+
+    "CurrencyPrices": {
+      "type": "object",
+      "description": "Override prices for specific currencies",
+      "additionalProperties": { "$ref": "#/$defs/Money" },
+      "propertyNames": { "$ref": "#/$defs/Currency" }
+    },
+
+    "Limits": {
+      "type": "object",
+      "description": "Entitlement values. Use 'unlimited' for no limit.",
+      "additionalProperties": {
+        "oneOf": [
+          { "type": "integer" },
+          { "type": "boolean" },
+          { "const": "unlimited" },
+          { "$ref": "#/$defs/RateLimit" }
+        ]
+      }
+    },
+
+    "RateLimit": {
+      "type": "object",
+      "required": ["limit", "per"],
+      "additionalProperties": false,
+      "properties": {
+        "limit": { "type": "integer", "minimum": 1 },
+        "per": { "enum": ["second", "minute", "hour", "day"] }
+      }
+    },
+
+    "Addon": {
+      "type": "object",
+      "required": ["id", "name", "price"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "$ref": "#/$defs/Price" },
+        "grants": {
+          "$ref": "#/$defs/AddonGrants",
+          "description": "What this addon adds to plan limits"
+        },
+        "requires_plan": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Plan IDs. Empty = available for all plans."
+        }
+      }
+    },
+
+    "AddonGrants": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          { "type": "integer" },
+          { "type": "boolean" },
+          { "type": "string", "pattern": "^[+-]\\d+$" }
+        ]
+      }
+    },
+
+    "Promotion": {
+      "type": "object",
+      "required": ["code", "discount"],
+      "additionalProperties": false,
+      "properties": {
+        "code": { "type": "string", "pattern": "^[A-Z0-9_]+$" },
+        "description": { "type": "string" },
+        "discount": { "$ref": "#/$defs/Discount" },
+        "duration": {
+          "oneOf": [
+            { "const": "once" },
+            { "const": "forever" },
+            {
+              "type": "object",
+              "required": ["months"],
+              "additionalProperties": false,
+              "properties": { "months": { "type": "integer", "minimum": 1 } }
+            }
+          ],
+          "default": "once"
+        },
+        "applies_to": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Plan IDs. Empty = all plans."
+        },
+        "new_customers_only": { "type": "boolean", "default": true },
+        "max_uses": { "type": "integer", "minimum": 1 },
+        "expires": { "type": "string", "format": "date" },
+        "active": { "type": "boolean", "default": true }
+      }
+    },
+
+    "Discount": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["percent"],
+          "additionalProperties": false,
+          "properties": { "percent": { "type": "integer", "minimum": 1, "maximum": 100 } }
+        },
+        {
+          "type": "object",
+          "required": ["fixed"],
+          "additionalProperties": false,
+          "properties": { "fixed": { "$ref": "#/$defs/Money" } }
+        }
+      ]
+    },
+
+    "Money": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Amount in cents"
+    },
+
+    "Currency": {
+      "type": "string",
+      "pattern": "^[a-z]{3}$",
+      "default": "usd"
+    }
+  }
+}

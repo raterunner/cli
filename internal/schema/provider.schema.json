@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raterunner.io/schemas/billing/provider",
+  "title": "Provider IDs Schema",
+  "description": "Maps billing entities to provider-specific IDs. One file per provider+environment.",
+  "type": "object",
+  "required": ["provider", "environment"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "provider": { "enum": ["stripe", "paddle", "chargebee"] },
+    "environment": { "enum": ["sandbox", "production"] },
+    "synced_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last sync timestamp"
+    },
+    "plans": {
+      "type": "object",
+      "description": "Plan ID -> provider IDs",
+      "additionalProperties": { "$ref": "#/$defs/PlanIds" }
+    },
+    "addons": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/ProductIds" }
+    },
+    "promotions": {
+      "type": "object",
+      "description": "Promotion code -> provider ID",
+      "additionalProperties": { "type": "string" }
+    }
+  },
+
+  "$defs": {
+    "PlanIds": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "product_id": { "type": "string" },
+        "prices": {
+          "type": "object",
+          "description": "Billing interval -> price ID",
+          "additionalProperties": { "type": "string" },
+          "propertyNames": { "enum": ["monthly", "quarterly", "yearly"] }
+        }
+      }
+    },
+    "ProductIds": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "product_id": { "type": "string" },
+        "price_id": { "type": "string" }
+      }
+    }
+  }
+}
