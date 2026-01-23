@@ -1,0 +1,4 @@
+# Test case: Unknown provider name
+# Expects: validation error, provider must be stripe/paddle/chargebee
+provider: unknown_provider
+environment: production

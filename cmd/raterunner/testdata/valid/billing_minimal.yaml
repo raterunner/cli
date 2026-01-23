@@ -1,0 +1,8 @@
+# Test case: Minimal valid billing configuration
+# Expects: validation passes
+version: 1
+plans:
+  - id: free
+    name: Free Plan
+    prices:
+      monthly: { amount: 0 }

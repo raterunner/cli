@@ -1,0 +1,9 @@
+# Test case: Valid Stripe provider configuration
+# Expects: validation passes, auto-detected as provider type
+provider: stripe
+environment: production
+plans:
+  pro:
+    product_id: prod_abc123
+    prices:
+      monthly: price_xyz789

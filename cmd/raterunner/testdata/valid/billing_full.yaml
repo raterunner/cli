@@ -1,0 +1,45 @@
+# Test case: Full billing configuration with all features
+# Expects: validation passes
+version: 1
+
+entitlements:
+  projects:
+    type: int
+    unit: project
+  api_requests:
+    type: rate
+    unit: request
+  sso:
+    type: bool
+
+plans:
+  - id: free
+    name: Free Plan
+    prices:
+      monthly: { amount: 0 }
+    limits:
+      projects: 3
+      api_requests: { limit: 100, per: minute }
+      sso: false
+
+  - id: pro
+    name: Pro Plan
+    prices:
+      monthly: { amount: 2900 }
+      yearly: { amount: 29000 }
+    limits:
+      projects: 25
+      api_requests: { limit: 1000, per: minute }
+      sso: true
+
+addons:
+  - id: extra_projects
+    name: Extra Projects
+    price: { amount: 1000 }
+    grants:
+      projects: "+10"
+
+promotions:
+  - code: LAUNCH50
+    discount: { percent: 50 }
+    duration: { months: 3 }

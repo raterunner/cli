@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "plans": [
+    {
+      "id": "free",
+      "name": "Free",
+      "prices": {
+        "monthly": { "amount": 0 }
+      }
+    }
+  ]
+}

@@ -79,16 +79,21 @@ func validateAction(c *cli.Context) error {
 		return err
 	}
 
+	out := c.App.Writer
+	if out == nil {
+		out = os.Stdout
+	}
+
 	if result.Valid {
-		fmt.Printf("✓ %s is valid\n", filePath)
+		fmt.Fprintf(out, "✓ %s is valid\n", filePath)
 		return nil
 	}
 
-	fmt.Printf("✗ %s has %d validation error(s):\n\n", filePath, len(result.Errors))
+	fmt.Fprintf(out, "✗ %s has %d validation error(s):\n\n", filePath, len(result.Errors))
 	for i, e := range result.Errors {
-		fmt.Printf("  %d. %s\n", i+1, e.String())
+		fmt.Fprintf(out, "  %d. %s\n", i+1, e.String())
 	}
-	fmt.Println()
+	fmt.Fprintln(out)
 
 	return cli.Exit("", 1)
 }

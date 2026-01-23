@@ -1,0 +1,8 @@
+# Test case: Invalid schema version
+# Expects: validation error at /version
+version: 99
+plans:
+  - id: free
+    name: Free
+    prices:
+      monthly: { amount: 0 }

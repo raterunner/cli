@@ -1,0 +1,21 @@
+# Test case: Addon grants entitlement not defined in entitlements section
+# Expects: validation error about "undefined entitlement 'nonexistent'"
+version: 1
+
+entitlements:
+  projects:
+    type: int
+
+plans:
+  - id: free
+    name: Free
+    prices:
+      monthly: { amount: 0 }
+
+addons:
+  - id: extra
+    name: Extra Stuff
+    price: { amount: 500 }
+    grants:
+      projects: "+10"
+      nonexistent: 5   # This is not defined in entitlements

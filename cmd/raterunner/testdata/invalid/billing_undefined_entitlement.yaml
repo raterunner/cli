@@ -1,0 +1,16 @@
+# Test case: Plan references entitlement not defined in entitlements section
+# Expects: validation error about "undefined entitlement 'unknown_feature'"
+version: 1
+
+entitlements:
+  projects:
+    type: int
+
+plans:
+  - id: pro
+    name: Pro Plan
+    prices:
+      monthly: { amount: 1900 }
+    limits:
+      projects: 10
+      unknown_feature: true   # This is not defined above

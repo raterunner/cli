@@ -1,0 +1,7 @@
+# Test case: Plan missing required 'name' field
+# Expects: validation error at /plans/0, message contains "name"
+version: 1
+plans:
+  - id: free
+    prices:
+      monthly: { amount: 0 }

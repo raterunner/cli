@@ -1,0 +1,8 @@
+# Test case: Plan ID doesn't match pattern ^[a-z][a-z0-9_]*$
+# Expects: validation error at /plans/0/id
+version: 1
+plans:
+  - id: INVALID_ID
+    name: Test Plan
+    prices:
+      monthly: { amount: 0 }

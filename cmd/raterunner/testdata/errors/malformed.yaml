@@ -1,0 +1,6 @@
+# Test case: Malformed YAML that cannot be parsed
+# Expects: error loading file
+version: 1
+plans:
+  - id: free
+    name: "unclosed string
