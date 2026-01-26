@@ -27,11 +27,6 @@ func main() {
 						Aliases: []string{"s"},
 						Usage:   "Path to directory containing schema files (uses embedded schemas if not specified)",
 					},
-					&cli.StringFlag{
-						Name:    "type",
-						Aliases: []string{"t"},
-						Usage:   "Schema type: billing or provider (auto-detected if not specified)",
-					},
 				},
 				Action: validateAction,
 			},
@@ -51,11 +46,7 @@ func validateAction(c *cli.Context) error {
 
 	filePath := c.Args().First()
 	schemaDir := c.String("schema-dir")
-	schemaType := c.String("type")
-
-	if schemaType == "" {
-		schemaType = detectSchemaType(filePath)
-	}
+	schemaType := detectSchemaType(filePath)
 
 	var v *validator.Validator
 	if schemaDir != "" {

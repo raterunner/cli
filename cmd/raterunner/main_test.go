@@ -29,11 +29,6 @@ func runApp(args ...string) (stdout, stderr string, exitCode int) {
 						Aliases: []string{"s"},
 						Usage:   "Path to directory containing schema files",
 					},
-					&cli.StringFlag{
-						Name:    "type",
-						Aliases: []string{"t"},
-						Usage:   "Schema type: billing or provider",
-					},
 				},
 				Action: validateAction,
 			},
@@ -115,7 +110,7 @@ func TestValidate_InvalidPlanID(t *testing.T) {
 }
 
 func TestValidate_InvalidProviderFile(t *testing.T) {
-	stdout, _, exitCode := runApp("validate", "-t", "provider", "testdata/invalid/provider_unknown.yaml")
+	stdout, _, exitCode := runApp("validate", "testdata/invalid/provider_unknown.yaml")
 
 	assertExitCode(t, 1, exitCode)
 	assertContains(t, stdout, "validation error")
@@ -166,14 +161,6 @@ func TestValidate_NoArguments(t *testing.T) {
 	_, _, exitCode := runApp("validate")
 
 	assertExitCode(t, 1, exitCode)
-}
-
-func TestValidate_ExplicitTypeFlag(t *testing.T) {
-	// Use provider file but could also work with --type override
-	stdout, _, exitCode := runApp("validate", "--type", "provider", "testdata/valid/provider_stripe.yaml")
-
-	assertExitCode(t, 0, exitCode)
-	assertContains(t, stdout, "is valid")
 }
 
 // --- Test helpers ---
