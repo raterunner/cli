@@ -57,6 +57,17 @@ func main() {
 				},
 				Action: applyAction,
 			},
+			{
+				Name:  "truncate",
+				Usage: "Archive all products and prices in Stripe (sandbox only)",
+				Flags: []cli.Flag{
+					&cli.BoolFlag{
+						Name:  "confirm",
+						Usage: "Confirm the operation (required)",
+					},
+				},
+				Action: truncateAction,
+			},
 		},
 	}
 
@@ -249,4 +260,41 @@ func getAPIKey(env stripe.Environment) (string, error) {
 	}
 
 	return key, nil
+}
+
+func truncateAction(c *cli.Context) error {
+	out := c.App.Writer
+	if out == nil {
+		out = os.Stdout
+	}
+
+	if !c.Bool("confirm") {
+		fmt.Fprintln(out, "WARNING: This will archive ALL products and prices in your Stripe sandbox account.")
+		fmt.Fprintln(out, "")
+		fmt.Fprintln(out, "To proceed, run:")
+		fmt.Fprintln(out, "  raterunner truncate --confirm")
+		return cli.Exit("", 1)
+	}
+
+	// Get API key - only sandbox is allowed
+	apiKey, err := getAPIKey(stripe.Sandbox)
+	if err != nil {
+		return err
+	}
+
+	// Create Stripe client
+	client, err := stripe.NewClient(stripe.Sandbox, apiKey)
+	if err != nil {
+		return fmt.Errorf("failed to create Stripe client: %w", err)
+	}
+
+	fmt.Fprintln(out, "Archiving all products and prices in sandbox...")
+
+	result, err := client.Truncate()
+	if err != nil {
+		return fmt.Errorf("truncate failed: %w", err)
+	}
+
+	fmt.Fprintf(out, "Done. Archived %d prices and %d products.\n", result.PricesArchived, result.ProductsArchived)
+	return nil
 }

@@ -1,4 +1,4 @@
-.PHONY: build generate test clean
+.PHONY: build generate test test-integration clean
 
 # Copy schemas from submodule for embedding
 generate:
@@ -10,9 +10,15 @@ generate:
 build: generate
 	go build -o bin/raterunner ./cmd/raterunner
 
-# Run tests
+# Run unit tests
 test: generate
 	go test ./...
+
+# Run integration tests (requires STRIPE_SANDBOX_KEY)
+# Usage: make test-integration
+#    or: STRIPE_SANDBOX_KEY=sk_test_... make test-integration
+test-integration: build
+	@./scripts/integration-test.sh
 
 # Clean build artifacts
 clean:

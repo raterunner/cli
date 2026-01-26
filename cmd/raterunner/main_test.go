@@ -56,6 +56,17 @@ func runApp(args ...string) (stdout, stderr string, exitCode int) {
 				},
 				Action: applyAction,
 			},
+			{
+				Name:  "truncate",
+				Usage: "Archive all products and prices in Stripe (sandbox only)",
+				Flags: []cli.Flag{
+					&cli.BoolFlag{
+						Name:  "confirm",
+						Usage: "Confirm the operation (required)",
+					},
+				},
+				Action: truncateAction,
+			},
 		},
 		ExitErrHandler: func(c *cli.Context, err error) {
 			// Write error to stdout to capture it in tests (matches main.go behavior)
@@ -257,6 +268,35 @@ func TestApply_WrongKeyPrefix(t *testing.T) {
 	defer os.Unsetenv("STRIPE_SANDBOX_KEY")
 
 	stdout, _, exitCode := runApp("apply", "--env", "sandbox", "--dry-run", "testdata/valid/billing_full.yaml")
+
+	assertExitCode(t, 1, exitCode)
+	assertContains(t, stdout, "sandbox environment requires a test key")
+}
+
+// --- Truncate command tests ---
+
+func TestTruncate_WithoutConfirm(t *testing.T) {
+	stdout, _, exitCode := runApp("truncate")
+
+	assertExitCode(t, 1, exitCode)
+	assertContains(t, stdout, "WARNING")
+	assertContains(t, stdout, "raterunner truncate --confirm")
+}
+
+func TestTruncate_MissingAPIKey(t *testing.T) {
+	os.Unsetenv("STRIPE_SANDBOX_KEY")
+
+	stdout, _, exitCode := runApp("truncate", "--confirm")
+
+	assertExitCode(t, 1, exitCode)
+	assertContains(t, stdout, "STRIPE_SANDBOX_KEY")
+}
+
+func TestTruncate_WrongKeyPrefix(t *testing.T) {
+	os.Setenv("STRIPE_SANDBOX_KEY", "sk_live_wrongprefix")
+	defer os.Unsetenv("STRIPE_SANDBOX_KEY")
+
+	stdout, _, exitCode := runApp("truncate", "--confirm")
 
 	assertExitCode(t, 1, exitCode)
 	assertContains(t, stdout, "sandbox environment requires a test key")
