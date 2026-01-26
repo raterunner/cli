@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/urfave/cli/v2"
@@ -99,10 +100,13 @@ func validateAction(c *cli.Context) error {
 }
 
 func detectSchemaType(filePath string) string {
-	lower := strings.ToLower(filePath)
-	if strings.Contains(lower, "provider") || strings.Contains(lower, "stripe") ||
-		strings.Contains(lower, "paddle") || strings.Contains(lower, "chargebee") {
-		return "provider"
+	filename := strings.ToLower(filepath.Base(filePath))
+	// Detect provider config files by filename prefix
+	providerPrefixes := []string{"provider_", "stripe_", "paddle_", "chargebee_"}
+	for _, prefix := range providerPrefixes {
+		if strings.HasPrefix(filename, prefix) {
+			return "provider"
+		}
 	}
 	return "billing"
 }

@@ -1,0 +1,8 @@
+# Test case: Valid billing configuration without providers field
+# Expects: validation passes (providers is optional)
+version: 1
+plans:
+  - id: free
+    name: Free Plan
+    prices:
+      monthly: { amount: 0 }

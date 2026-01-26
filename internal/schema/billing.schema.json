@@ -10,6 +10,15 @@
     "$schema": { "type": "string" },
     "version": { "const": 1 },
 
+    "providers": {
+      "type": "array",
+      "description": "Payment providers to sync with. CLI will error if provider is not supported.",
+      "items": {
+        "type": "string",
+        "enum": ["stripe", "paddle", "chargebee"]
+      },
+      "uniqueItems": true
+    },
     "settings": { "$ref": "#/$defs/Settings" },
     "entitlements": { "$ref": "#/$defs/EntitlementDefinitions" },
     "plans": {

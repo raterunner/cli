@@ -2,6 +2,9 @@
 # Expects: validation passes
 version: 1
 
+providers:
+  - stripe
+
 entitlements:
   projects:
     type: int

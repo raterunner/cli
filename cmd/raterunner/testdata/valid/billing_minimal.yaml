@@ -1,6 +1,8 @@
-# Test case: Minimal valid billing configuration
+# Test case: Minimal valid billing configuration with provider
 # Expects: validation passes
 version: 1
+providers:
+  - stripe
 plans:
   - id: free
     name: Free Plan

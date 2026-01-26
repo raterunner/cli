@@ -82,6 +82,14 @@ func TestValidate_ValidProviderStripe(t *testing.T) {
 	assertContains(t, stdout, "is valid")
 }
 
+func TestValidate_ValidBillingOptionalField(t *testing.T) {
+	// providers field is optional - this file has no providers section
+	stdout, _, exitCode := runApp("validate", "testdata/valid/billing_optional_field.yaml")
+
+	assertExitCode(t, 0, exitCode)
+	assertContains(t, stdout, "is valid")
+}
+
 // --- Invalid files: schema errors ---
 
 func TestValidate_MissingRequiredField(t *testing.T) {
@@ -106,8 +114,15 @@ func TestValidate_InvalidPlanID(t *testing.T) {
 	assertContains(t, stdout, "/plans/0/id")
 }
 
-func TestValidate_InvalidProvider(t *testing.T) {
+func TestValidate_InvalidProviderFile(t *testing.T) {
 	stdout, _, exitCode := runApp("validate", "-t", "provider", "testdata/invalid/provider_unknown.yaml")
+
+	assertExitCode(t, 1, exitCode)
+	assertContains(t, stdout, "validation error")
+}
+
+func TestValidate_UnsupportedProviderInBilling(t *testing.T) {
+	stdout, _, exitCode := runApp("validate", "testdata/invalid/billing_unsupported_provider.yaml")
 
 	assertExitCode(t, 1, exitCode)
 	assertContains(t, stdout, "validation error")
@@ -184,12 +199,14 @@ func TestTestdataFilesExist(t *testing.T) {
 		"testdata/valid/billing_minimal.yaml",
 		"testdata/valid/billing_full.yaml",
 		"testdata/valid/billing_minimal.json",
+		"testdata/valid/billing_optional_field.yaml",
 		"testdata/valid/provider_stripe.yaml",
 		"testdata/invalid/billing_missing_name.yaml",
 		"testdata/invalid/billing_bad_version.yaml",
 		"testdata/invalid/billing_invalid_plan_id.yaml",
 		"testdata/invalid/billing_undefined_entitlement.yaml",
 		"testdata/invalid/billing_undefined_entitlement_addon.yaml",
+		"testdata/invalid/billing_unsupported_provider.yaml",
 		"testdata/invalid/provider_unknown.yaml",
 		"testdata/errors/malformed.yaml",
 	}

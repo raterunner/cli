@@ -1,0 +1,11 @@
+# Test case: Unknown provider in providers list
+# Expects: validation error, provider must be stripe/paddle/chargebee
+version: 1
+providers:
+  - stripe
+  - unknown_provider
+plans:
+  - id: free
+    name: Free
+    prices:
+      monthly: { amount: 0 }
