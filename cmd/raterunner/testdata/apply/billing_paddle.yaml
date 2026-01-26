@@ -1,0 +1,19 @@
+# Test case: Billing config with unsupported paddle provider
+# Expects: apply command fails with "not supported yet" error
+version: 1
+
+providers:
+  - paddle
+
+entitlements:
+  projects:
+    type: int
+    unit: project
+
+plans:
+  - id: free
+    name: Free Plan
+    prices:
+      monthly: { amount: 0 }
+    limits:
+      projects: 3

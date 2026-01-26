@@ -32,8 +32,37 @@ func runApp(args ...string) (stdout, stderr string, exitCode int) {
 				},
 				Action: validateAction,
 			},
+			{
+				Name:      "apply",
+				Usage:     "Compare local billing config with remote Stripe state",
+				ArgsUsage: "<billing.yaml>",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:     "env",
+						Aliases:  []string{"e"},
+						Usage:    "Environment: sandbox or production",
+						Required: true,
+					},
+					&cli.BoolFlag{
+						Name:     "dry-run",
+						Usage:    "Preview changes without applying (required for now)",
+						Required: true,
+					},
+					&cli.BoolFlag{
+						Name:    "json",
+						Aliases: []string{"j"},
+						Usage:   "Output as JSON instead of table",
+					},
+				},
+				Action: applyAction,
+			},
 		},
-		ExitErrHandler: func(c *cli.Context, err error) {},
+		ExitErrHandler: func(c *cli.Context, err error) {
+			// Write error to stdout to capture it in tests (matches main.go behavior)
+			if err != nil {
+				outBuf.WriteString("Error: " + err.Error() + "\n")
+			}
+		},
 	}
 
 	fullArgs := append([]string{"raterunner"}, args...)
@@ -42,6 +71,10 @@ func runApp(args ...string) (stdout, stderr string, exitCode int) {
 	exitCode = 0
 	if err != nil {
 		exitCode = 1
+		// Capture errors returned from app.Run() that weren't handled by ExitErrHandler
+		if !strings.Contains(outBuf.String(), "Error:") {
+			outBuf.WriteString("Error: " + err.Error() + "\n")
+		}
 	}
 
 	return outBuf.String(), errBuf.String(), exitCode
@@ -163,6 +196,72 @@ func TestValidate_NoArguments(t *testing.T) {
 	assertExitCode(t, 1, exitCode)
 }
 
+// --- Apply command tests ---
+
+func TestApply_NoArguments(t *testing.T) {
+	stdout, _, exitCode := runApp("apply", "--env", "sandbox", "--dry-run")
+
+	assertExitCode(t, 1, exitCode)
+	assertContains(t, stdout, "missing required argument")
+}
+
+func TestApply_MissingEnvFlag(t *testing.T) {
+	stdout, _, exitCode := runApp("apply", "testdata/valid/billing_full.yaml", "--dry-run")
+
+	assertExitCode(t, 1, exitCode)
+	assertContains(t, stdout, "env")
+}
+
+func TestApply_MissingDryRunFlag(t *testing.T) {
+	stdout, _, exitCode := runApp("apply", "testdata/valid/billing_full.yaml", "--env", "sandbox")
+
+	assertExitCode(t, 1, exitCode)
+	assertContains(t, stdout, "dry-run")
+}
+
+func TestApply_InvalidEnv(t *testing.T) {
+	stdout, _, exitCode := runApp("apply", "--env", "staging", "--dry-run", "testdata/valid/billing_full.yaml")
+
+	assertExitCode(t, 1, exitCode)
+	assertContains(t, stdout, "invalid environment")
+}
+
+func TestApply_UnsupportedProvider(t *testing.T) {
+	stdout, _, exitCode := runApp("apply", "--env", "sandbox", "--dry-run", "testdata/apply/billing_paddle.yaml")
+
+	assertExitCode(t, 1, exitCode)
+	assertContains(t, stdout, "not supported yet")
+	assertContains(t, stdout, "raterunner@akorchak.software")
+}
+
+func TestApply_NoProviders(t *testing.T) {
+	stdout, _, exitCode := runApp("apply", "--env", "sandbox", "--dry-run", "testdata/valid/billing_optional_field.yaml")
+
+	assertExitCode(t, 1, exitCode)
+	assertContains(t, stdout, "no providers specified")
+}
+
+func TestApply_MissingAPIKey(t *testing.T) {
+	// Ensure environment variable is not set
+	os.Unsetenv("STRIPE_SANDBOX_KEY")
+
+	stdout, _, exitCode := runApp("apply", "--env", "sandbox", "--dry-run", "testdata/valid/billing_full.yaml")
+
+	assertExitCode(t, 1, exitCode)
+	assertContains(t, stdout, "STRIPE_SANDBOX_KEY")
+}
+
+func TestApply_WrongKeyPrefix(t *testing.T) {
+	// Set a production key for sandbox environment
+	os.Setenv("STRIPE_SANDBOX_KEY", "sk_live_wrongprefix")
+	defer os.Unsetenv("STRIPE_SANDBOX_KEY")
+
+	stdout, _, exitCode := runApp("apply", "--env", "sandbox", "--dry-run", "testdata/valid/billing_full.yaml")
+
+	assertExitCode(t, 1, exitCode)
+	assertContains(t, stdout, "sandbox environment requires a test key")
+}
+
 // --- Test helpers ---
 
 func assertExitCode(t *testing.T, expected, actual int) {
@@ -196,6 +295,7 @@ func TestTestdataFilesExist(t *testing.T) {
 		"testdata/invalid/billing_unsupported_provider.yaml",
 		"testdata/invalid/provider_unknown.yaml",
 		"testdata/errors/malformed.yaml",
+		"testdata/apply/billing_paddle.yaml",
 	}
 
 	for _, f := range files {
