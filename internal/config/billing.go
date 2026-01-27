@@ -40,18 +40,51 @@ type Addon struct {
 
 // Promotion represents a promotional discount
 type Promotion struct {
-	Code     string           `yaml:"code" json:"code"`
-	Discount PromotionDiscount `yaml:"discount" json:"discount"`
-	Duration PromotionDuration `yaml:"duration" json:"duration"`
+	Code             string            `yaml:"code" json:"code"`
+	Description      string            `yaml:"description,omitempty" json:"description,omitempty"`
+	Discount         PromotionDiscount `yaml:"discount" json:"discount"`
+	Duration         any               `yaml:"duration,omitempty" json:"duration,omitempty"` // "once", "forever", or {months: N}
+	AppliesTo        []string          `yaml:"applies_to,omitempty" json:"applies_to,omitempty"`
+	NewCustomersOnly bool              `yaml:"new_customers_only,omitempty" json:"new_customers_only,omitempty"`
+	MaxUses          int               `yaml:"max_uses,omitempty" json:"max_uses,omitempty"`
+	Expires          string            `yaml:"expires,omitempty" json:"expires,omitempty"`
+	Active           *bool             `yaml:"active,omitempty" json:"active,omitempty"`
 }
 
 // PromotionDiscount defines the discount amount
 type PromotionDiscount struct {
 	Percent int `yaml:"percent,omitempty" json:"percent,omitempty"`
-	Amount  int `yaml:"amount,omitempty" json:"amount,omitempty"`
+	Fixed   int `yaml:"fixed,omitempty" json:"fixed,omitempty"`
 }
 
-// PromotionDuration defines how long the discount applies
-type PromotionDuration struct {
-	Months int `yaml:"months,omitempty" json:"months,omitempty"`
+// GetDurationMonths returns the number of months for repeating duration, 0 for "once", -1 for "forever"
+func (p *Promotion) GetDurationMonths() int {
+	if p.Duration == nil {
+		return 0 // default: once
+	}
+	switch d := p.Duration.(type) {
+	case string:
+		if d == "forever" {
+			return -1
+		}
+		return 0 // "once"
+	case map[string]any:
+		if months, ok := d["months"]; ok {
+			if m, ok := months.(int); ok {
+				return m
+			}
+			if m, ok := months.(float64); ok {
+				return int(m)
+			}
+		}
+	}
+	return 0
+}
+
+// IsActive returns whether the promotion is active (defaults to true)
+func (p *Promotion) IsActive() bool {
+	if p.Active == nil {
+		return true
+	}
+	return *p.Active
 }

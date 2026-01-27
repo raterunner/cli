@@ -243,8 +243,9 @@ func applyAction(c *cli.Context) error {
 		fmt.Fprintf(out, "  WARNING: %s\n", w)
 	}
 
-	fmt.Fprintf(out, "Done. Created %d products, %d prices. Archived %d prices.\n",
-		result.ProductsCreated, result.PricesCreated, result.PricesArchived)
+	fmt.Fprintf(out, "Done. Products: %d created. Prices: %d created, %d archived. Addons: %d. Coupons: %d. Promo codes: %d.\n",
+		result.ProductsCreated, result.PricesCreated, result.PricesArchived,
+		result.AddonsCreated, result.CouponsCreated, result.PromosCreated)
 
 	return nil
 }
@@ -352,7 +353,7 @@ func truncateAction(c *cli.Context) error {
 	}
 
 	if !c.Bool("confirm") {
-		fmt.Fprintln(out, "WARNING: This will archive ALL products and prices in your Stripe sandbox account.")
+		fmt.Fprintln(out, "WARNING: This will archive ALL products, prices, and delete coupons in your Stripe sandbox account.")
 		fmt.Fprintln(out, "")
 		fmt.Fprintln(out, "To proceed, run:")
 		fmt.Fprintln(out, "  raterunner truncate --confirm")
@@ -371,13 +372,14 @@ func truncateAction(c *cli.Context) error {
 		return fmt.Errorf("failed to create Stripe client: %w", err)
 	}
 
-	fmt.Fprintln(out, "Archiving all products and prices in sandbox...")
+	fmt.Fprintln(out, "Archiving all products, prices, and deleting coupons in sandbox...")
 
 	result, err := client.Truncate()
 	if err != nil {
 		return fmt.Errorf("truncate failed: %w", err)
 	}
 
-	fmt.Fprintf(out, "Done. Archived %d prices and %d products.\n", result.PricesArchived, result.ProductsArchived)
+	fmt.Fprintf(out, "Done. Archived %d prices, %d products. Deleted %d coupons.\n",
+		result.PricesArchived, result.ProductsArchived, result.CouponsDeleted)
 	return nil
 }

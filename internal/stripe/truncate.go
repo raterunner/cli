@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/stripe/stripe-go/v82"
+	"github.com/stripe/stripe-go/v82/coupon"
 	"github.com/stripe/stripe-go/v82/price"
 	"github.com/stripe/stripe-go/v82/product"
 )
@@ -12,9 +13,10 @@ import (
 type TruncateResult struct {
 	ProductsArchived int
 	PricesArchived   int
+	CouponsDeleted   int
 }
 
-// Truncate archives all products and prices in the Stripe account.
+// Truncate archives all products, prices, and deletes coupons in the Stripe account.
 // This only works in sandbox environment.
 func (c *Client) Truncate() (*TruncateResult, error) {
 	if c.env != Sandbox {
@@ -61,6 +63,23 @@ func (c *Client) Truncate() (*TruncateResult, error) {
 	}
 	if err := prodIter.Err(); err != nil {
 		return result, fmt.Errorf("failed to list products: %w", err)
+	}
+
+	// Delete all coupons
+	couponParams := &stripe.CouponListParams{}
+	couponParams.Filters.AddFilter("limit", "", "100")
+
+	couponIter := coupon.List(couponParams)
+	for couponIter.Next() {
+		c := couponIter.Coupon()
+		_, err := coupon.Del(c.ID, nil)
+		if err != nil {
+			return result, fmt.Errorf("failed to delete coupon %s: %w", c.ID, err)
+		}
+		result.CouponsDeleted++
+	}
+	if err := couponIter.Err(); err != nil {
+		return result, fmt.Errorf("failed to list coupons: %w", err)
 	}
 
 	return result, nil
