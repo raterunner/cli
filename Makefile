@@ -1,4 +1,4 @@
-.PHONY: build generate test test-integration clean release-check release-snapshot lint
+.PHONY: build generate test test-integration clean release-check release-snapshot release release-help lint
 
 # Copy schemas from submodule for embedding
 generate:

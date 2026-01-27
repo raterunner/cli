@@ -52,44 +52,30 @@ brew install raterunner/tap/raterunner
 
 ### Download binary
 
-Download the latest release from [GitHub Releases](https://github.com/raterunner/cli/releases):
+Download the latest release from [GitHub Releases](https://github.com/raterunner/cli/releases).
+
+Available builds:
+- **macOS**: `raterunner_VERSION_darwin_amd64.tar.gz` (Intel), `raterunner_VERSION_darwin_arm64.tar.gz` (Apple Silicon)
+- **Linux**: `raterunner_VERSION_linux_amd64.tar.gz`, `raterunner_VERSION_linux_arm64.tar.gz`
+- **Windows**: `raterunner_VERSION_windows_amd64.zip`, `raterunner_VERSION_windows_arm64.zip`
 
 ```bash
-# macOS (Apple Silicon)
-curl -Lo raterunner.tar.gz https://github.com/raterunner/cli/releases/latest/download/raterunner_Darwin_arm64.tar.gz
-tar -xzf raterunner.tar.gz
-sudo mv raterunner /usr/local/bin/
-
-# macOS (Intel)
-curl -Lo raterunner.tar.gz https://github.com/raterunner/cli/releases/latest/download/raterunner_Darwin_amd64.tar.gz
-tar -xzf raterunner.tar.gz
-sudo mv raterunner /usr/local/bin/
-
-# Linux (x86_64)
-curl -Lo raterunner.tar.gz https://github.com/raterunner/cli/releases/latest/download/raterunner_Linux_amd64.tar.gz
-tar -xzf raterunner.tar.gz
-sudo mv raterunner /usr/local/bin/
-
-# Linux (ARM64)
-curl -Lo raterunner.tar.gz https://github.com/raterunner/cli/releases/latest/download/raterunner_Linux_arm64.tar.gz
-tar -xzf raterunner.tar.gz
+# Example: install v0.0.1 on macOS (Apple Silicon)
+curl -sL https://github.com/raterunner/cli/releases/download/v0.0.1/raterunner_0.0.1_darwin_arm64.tar.gz | tar xz
 sudo mv raterunner /usr/local/bin/
 ```
 
 ### Linux packages
 
+Available on [GitHub Releases](https://github.com/raterunner/cli/releases):
+- `.deb` — Debian, Ubuntu
+- `.rpm` — RHEL, Fedora, CentOS
+- `.apk` — Alpine
+
 ```bash
-# Debian/Ubuntu
-curl -Lo raterunner.deb https://github.com/raterunner/cli/releases/latest/download/raterunner_amd64.deb
-sudo dpkg -i raterunner.deb
-
-# RHEL/Fedora
-curl -Lo raterunner.rpm https://github.com/raterunner/cli/releases/latest/download/raterunner_amd64.rpm
-sudo rpm -i raterunner.rpm
-
-# Alpine
-curl -Lo raterunner.apk https://github.com/raterunner/cli/releases/latest/download/raterunner_amd64.apk
-sudo apk add --allow-untrusted raterunner.apk
+# Example: Debian/Ubuntu
+curl -sLO https://github.com/raterunner/cli/releases/download/v0.0.1/raterunner_0.0.1_linux_amd64.deb
+sudo dpkg -i raterunner_0.0.1_linux_amd64.deb
 ```
 
 ### Go install
