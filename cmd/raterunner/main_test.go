@@ -18,6 +18,13 @@ func runApp(args ...string) (stdout, stderr string, exitCode int) {
 		Version:   "0.1.0",
 		Writer:    &outBuf,
 		ErrWriter: &errBuf,
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:    "quiet",
+				Aliases: []string{"q"},
+				Usage:   "Suppress non-essential output",
+			},
+		},
 		Commands: []*cli.Command{
 			{
 				Name:      "validate",
@@ -80,10 +87,38 @@ func runApp(args ...string) (stdout, stderr string, exitCode int) {
 				Flags: []cli.Flag{
 					&cli.BoolFlag{
 						Name:  "confirm",
-						Usage: "Confirm the operation (required)",
+						Usage: "Skip interactive confirmation",
 					},
 				},
 				Action: truncateAction,
+			},
+			{
+				Name:  "config",
+				Usage: "Manage CLI configuration",
+				Subcommands: []*cli.Command{
+					{
+						Name:      "set",
+						Usage:     "Set a configuration value",
+						ArgsUsage: "<key> <value>",
+						Action:    configSetAction,
+					},
+					{
+						Name:      "get",
+						Usage:     "Get a configuration value",
+						ArgsUsage: "<key>",
+						Action:    configGetAction,
+					},
+					{
+						Name:   "list",
+						Usage:  "List all configuration values",
+						Action: configListAction,
+					},
+					{
+						Name:   "path",
+						Usage:  "Show configuration file path",
+						Action: configPathAction,
+					},
+				},
 			},
 		},
 		ExitErrHandler: func(c *cli.Context, err error) {
@@ -345,6 +380,71 @@ func TestTruncate_WrongKeyPrefix(t *testing.T) {
 
 	assertExitCode(t, 1, exitCode)
 	assertContains(t, stdout, "sandbox environment requires a test key")
+}
+
+// --- Config command tests ---
+
+func TestConfig_Path(t *testing.T) {
+	stdout, _, exitCode := runApp("config", "path")
+
+	assertExitCode(t, 0, exitCode)
+	assertContains(t, stdout, ".raterunner")
+	assertContains(t, stdout, "config.yaml")
+}
+
+func TestConfig_List(t *testing.T) {
+	stdout, _, exitCode := runApp("config", "list")
+
+	assertExitCode(t, 0, exitCode)
+	assertContains(t, stdout, "quiet")
+}
+
+func TestConfig_GetUnknownKey(t *testing.T) {
+	stdout, _, exitCode := runApp("config", "get", "unknown_key")
+
+	assertExitCode(t, 1, exitCode)
+	assertContains(t, stdout, "unknown config key")
+}
+
+func TestConfig_SetUnknownKey(t *testing.T) {
+	stdout, _, exitCode := runApp("config", "set", "unknown_key", "value")
+
+	assertExitCode(t, 1, exitCode)
+	assertContains(t, stdout, "unknown config key")
+}
+
+func TestConfig_SetMissingArgs(t *testing.T) {
+	stdout, _, exitCode := runApp("config", "set", "quiet")
+
+	assertExitCode(t, 1, exitCode)
+	assertContains(t, stdout, "usage")
+}
+
+func TestConfig_GetMissingArgs(t *testing.T) {
+	stdout, _, exitCode := runApp("config", "get")
+
+	assertExitCode(t, 1, exitCode)
+	assertContains(t, stdout, "usage")
+}
+
+// --- Quiet flag tests ---
+
+func TestQuietFlag_Validate(t *testing.T) {
+	// With --quiet flag, success output is suppressed
+	stdout, _, exitCode := runApp("--quiet", "validate", "testdata/valid/billing_minimal.yaml")
+
+	assertExitCode(t, 0, exitCode)
+	if strings.Contains(stdout, "is valid") {
+		t.Error("expected quiet mode to suppress 'is valid' output")
+	}
+}
+
+func TestQuietFlag_ValidateErrors(t *testing.T) {
+	// With --quiet flag, errors are still shown
+	stdout, _, exitCode := runApp("--quiet", "validate", "testdata/invalid/billing_missing_name.yaml")
+
+	assertExitCode(t, 1, exitCode)
+	assertContains(t, stdout, "validation error") // Errors still shown
 }
 
 // --- Test helpers ---

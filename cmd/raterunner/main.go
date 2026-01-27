@@ -454,6 +454,11 @@ func configSetAction(c *cli.Context) error {
 		return fmt.Errorf("usage: raterunner config set <key> <value>")
 	}
 
+	out := c.App.Writer
+	if out == nil {
+		out = os.Stdout
+	}
+
 	key := c.Args().Get(0)
 	value := c.Args().Get(1)
 
@@ -473,13 +478,18 @@ func configSetAction(c *cli.Context) error {
 		return fmt.Errorf("failed to save settings: %w", err)
 	}
 
-	fmt.Printf("Set %s = %s\n", key, value)
+	fmt.Fprintf(out, "Set %s = %s\n", key, value)
 	return nil
 }
 
 func configGetAction(c *cli.Context) error {
 	if c.NArg() < 1 {
 		return fmt.Errorf("usage: raterunner config get <key>")
+	}
+
+	out := c.App.Writer
+	if out == nil {
+		out = os.Stdout
 	}
 
 	key := c.Args().Get(0)
@@ -491,7 +501,7 @@ func configGetAction(c *cli.Context) error {
 
 	switch key {
 	case "quiet":
-		fmt.Printf("%v\n", settings.Quiet)
+		fmt.Fprintf(out, "%v\n", settings.Quiet)
 	default:
 		return fmt.Errorf("unknown config key: %s (available: quiet)", key)
 	}
@@ -500,16 +510,26 @@ func configGetAction(c *cli.Context) error {
 }
 
 func configListAction(c *cli.Context) error {
+	out := c.App.Writer
+	if out == nil {
+		out = os.Stdout
+	}
+
 	settings, err := config.LoadSettings()
 	if err != nil {
 		return fmt.Errorf("failed to load settings: %w", err)
 	}
 
-	fmt.Printf("quiet = %v\n", settings.Quiet)
+	fmt.Fprintf(out, "quiet = %v\n", settings.Quiet)
 	return nil
 }
 
 func configPathAction(c *cli.Context) error {
-	fmt.Println(config.DefaultSettingsPath())
+	out := c.App.Writer
+	if out == nil {
+		out = os.Stdout
+	}
+
+	fmt.Fprintln(out, config.DefaultSettingsPath())
 	return nil
 }
