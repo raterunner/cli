@@ -1,0 +1,144 @@
+# Test case: Advanced billing with all pricing types
+# Expects: validation passes
+version: 1
+
+providers:
+  - stripe
+
+settings:
+  currency: usd
+  trial_days: 14
+
+entitlements:
+  seats:
+    type: int
+    unit: seat
+  api_calls:
+    type: int
+    unit: call
+  storage_gb:
+    type: int
+    unit: GB
+
+plans:
+  # Free plan - flat pricing
+  - id: free
+    name: Free Plan
+    description: Get started for free with basic features
+    headline: Perfect for individuals
+    type: personal
+    public: true
+    default: true
+    prices:
+      monthly: { amount: 0 }
+    limits:
+      seats: 1
+      api_calls: 1000
+      storage_gb: 1
+    features:
+      - "1 user included"
+      - "1,000 API calls/month"
+      - "1 GB storage"
+
+  # Pro plan - flat pricing with trial
+  - id: pro
+    name: Pro Plan
+    description: For growing teams that need more power
+    headline: Most popular
+    type: team
+    trial_days: 14
+    prices:
+      monthly: { amount: 2900 }
+      quarterly: { amount: 7900 }
+      yearly: { amount: 29000 }
+    limits:
+      seats: 10
+      api_calls: 50000
+      storage_gb: 50
+    features:
+      - "Up to 10 users"
+      - "50,000 API calls/month"
+      - "50 GB storage"
+      - "Priority support"
+    upgrades_to:
+      - enterprise
+    metadata:
+      recommended: "true"
+
+  # Enterprise - per-seat pricing (usage-based)
+  - id: enterprise
+    name: Enterprise Plan
+    description: For large organizations with custom needs
+    headline: Unlimited scale
+    type: enterprise
+    prices:
+      monthly:
+        per_unit: 1500
+        unit: seat
+        min: 10
+    limits:
+      seats: unlimited
+      api_calls: unlimited
+      storage_gb: unlimited
+    features:
+      - "Unlimited users ($15/seat)"
+      - "Unlimited API calls"
+      - "Unlimited storage"
+      - "Dedicated support"
+      - "SLA guarantee"
+
+  # API plan - tiered pricing
+  - id: api_plan
+    name: API Access Plan
+    description: Pay-as-you-go API access
+    type: personal
+    prices:
+      monthly:
+        tiers:
+          - up_to: 10000
+            amount: 0
+          - up_to: 100000
+            amount: 10
+          - up_to: 1000000
+            amount: 5
+          - up_to: unlimited
+            amount: 2
+        mode: graduated
+        unit: API call
+    limits:
+      api_calls: unlimited
+    features:
+      - "First 10,000 calls free"
+      - "10,000-100,000: $0.10/call"
+      - "100,000-1M: $0.05/call"
+      - "1M+: $0.02/call"
+
+addons:
+  - id: extra_seats
+    name: Additional Seats
+    description: Add more team members
+    price: { amount: 1000 }
+    grants:
+      seats: "+5"
+
+  - id: extra_storage
+    name: Extra Storage
+    description: Add 100 GB of storage
+    price: { amount: 2000 }
+    grants:
+      storage_gb: "+100"
+
+promotions:
+  - code: LAUNCH50
+    description: 50% off for 3 months
+    discount: { percent: 50 }
+    duration: { months: 3 }
+    new_customers_only: true
+
+  - code: YEARLY20
+    description: 20% off yearly plans forever
+    discount: { percent: 20 }
+    duration: forever
+    applies_to:
+      - pro
+      - enterprise

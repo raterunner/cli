@@ -74,12 +74,44 @@ func (c *Client) syncPlan(plan config.Plan, existingProducts []Product, result *
 					plan.ID, plan.Name, existingProduct.Name))
 		}
 	} else {
-		// Create new product
+		// Create new product with full metadata
 		params := &stripe.ProductParams{
 			Name: stripe.String(plan.Name),
 			Metadata: map[string]string{
 				"plan_code": plan.ID,
 			},
+		}
+
+		// Add description
+		if plan.Description != "" {
+			params.Description = stripe.String(plan.Description)
+		}
+
+		// Add headline to metadata
+		if plan.Headline != "" {
+			params.Metadata["headline"] = plan.Headline
+		}
+
+		// Add plan type to metadata
+		if plan.Type != "" {
+			params.Metadata["plan_type"] = plan.Type
+		}
+
+		// Add marketing features
+		if len(plan.Features) > 0 {
+			params.MarketingFeatures = make([]*stripe.ProductMarketingFeatureParams, len(plan.Features))
+			for i, f := range plan.Features {
+				params.MarketingFeatures[i] = &stripe.ProductMarketingFeatureParams{
+					Name: stripe.String(f),
+				}
+			}
+		}
+
+		// Add custom metadata
+		for k, v := range plan.Metadata {
+			if str, ok := v.(string); ok {
+				params.Metadata[k] = str
+			}
 		}
 
 		newProduct, err := product.New(params)
@@ -92,7 +124,7 @@ func (c *Client) syncPlan(plan config.Plan, existingProducts []Product, result *
 
 	// Sync prices
 	for interval, localPrice := range plan.Prices {
-		if err := c.syncPrice(productID, plan.ID, interval, localPrice.Amount, existingPrices, result); err != nil {
+		if err := c.syncPriceAdvanced(productID, plan.ID, interval, localPrice, plan.TrialDays, existingPrices, result); err != nil {
 			return err
 		}
 	}
@@ -100,57 +132,117 @@ func (c *Client) syncPlan(plan config.Plan, existingProducts []Product, result *
 	return nil
 }
 
-func (c *Client) syncPrice(productID, planID, interval string, amount int, existingPrices []ProductPrice, result *SyncResult) error {
-	// Check if price with exact amount already exists
-	for _, p := range existingPrices {
-		if p.Interval == interval && p.Amount == int64(amount) && p.Active {
-			return nil // Price already exists
-		}
-	}
+// syncPriceAdvanced creates prices supporting flat, per_unit, and tiered pricing
+func (c *Client) syncPriceAdvanced(productID, planID, interval string, localPrice config.Price, trialDays int, existingPrices []ProductPrice, result *SyncResult) error {
+	priceType := localPrice.PriceType()
 
-	// Check for conflicting price
-	for _, p := range existingPrices {
-		if p.Interval == interval && p.Active && p.Amount != int64(amount) {
-			result.Warnings = append(result.Warnings,
-				fmt.Sprintf("plan '%s' %s: price differs (local=%d, stripe=%d), archiving old and creating new",
-					planID, interval, amount, p.Amount))
-
-			// Archive old price
-			_, err := price.Update(p.ID, &stripe.PriceParams{
-				Active: stripe.Bool(false),
-			})
-			if err != nil {
-				return fmt.Errorf("failed to archive old price %s: %w", p.ID, err)
+	// For flat prices, check if exact price already exists
+	if priceType == "flat" {
+		for _, p := range existingPrices {
+			if p.Interval == interval && p.Amount == int64(localPrice.Amount) && p.Active {
+				return nil // Price already exists
 			}
-			result.PricesArchived++
+		}
+
+		// Archive conflicting prices
+		for _, p := range existingPrices {
+			if p.Interval == interval && p.Active && p.Amount != int64(localPrice.Amount) {
+				result.Warnings = append(result.Warnings,
+					fmt.Sprintf("plan '%s' %s: price differs (local=%d, stripe=%d), archiving old and creating new",
+						planID, interval, localPrice.Amount, p.Amount))
+
+				_, err := price.Update(p.ID, &stripe.PriceParams{
+					Active: stripe.Bool(false),
+				})
+				if err != nil {
+					return fmt.Errorf("failed to archive old price %s: %w", p.ID, err)
+				}
+				result.PricesArchived++
+			}
 		}
 	}
 
-	// Create new price
+	// Build price params
 	params := &stripe.PriceParams{
-		Product:    stripe.String(productID),
-		UnitAmount: stripe.Int64(int64(amount)),
-		Currency:   stripe.String("usd"),
+		Product:  stripe.String(productID),
+		Currency: stripe.String("usd"),
 	}
 
+	// Set price based on type
+	switch priceType {
+	case "flat":
+		params.UnitAmount = stripe.Int64(int64(localPrice.Amount))
+
+	case "per_unit":
+		params.UnitAmount = stripe.Int64(int64(localPrice.PerUnit))
+		params.BillingScheme = stripe.String("per_unit")
+		// Transform quantity is handled at subscription level
+
+	case "tiered":
+		params.BillingScheme = stripe.String("tiered")
+		if localPrice.Mode == "volume" {
+			params.TiersMode = stripe.String("volume")
+		} else {
+			params.TiersMode = stripe.String("graduated")
+		}
+
+		params.Tiers = make([]*stripe.PriceTierParams, len(localPrice.Tiers))
+		for i, tier := range localPrice.Tiers {
+			tierParam := &stripe.PriceTierParams{}
+
+			upTo := tier.GetTierUpTo()
+			if upTo == -1 {
+				tierParam.UpToInf = stripe.Bool(true)
+			} else {
+				tierParam.UpTo = stripe.Int64(upTo)
+			}
+
+			// Always set UnitAmount (even if 0 for free tiers)
+			// Stripe requires at least one of UnitAmount or FlatAmount per tier
+			if tier.Flat > 0 {
+				tierParam.FlatAmount = stripe.Int64(int64(tier.Flat))
+			} else {
+				// Use UnitAmount (can be 0 for free tiers)
+				tierParam.UnitAmount = stripe.Int64(int64(tier.Amount))
+			}
+
+			params.Tiers[i] = tierParam
+		}
+	}
+
+	// Set recurring interval
 	if interval != "" && interval != "one_time" {
-		var stripeInterval stripe.PriceRecurringInterval
+		recurring := &stripe.PriceRecurringParams{}
+
 		switch interval {
 		case "monthly":
-			stripeInterval = stripe.PriceRecurringIntervalMonth
+			recurring.Interval = stripe.String(string(stripe.PriceRecurringIntervalMonth))
+		case "quarterly":
+			recurring.Interval = stripe.String(string(stripe.PriceRecurringIntervalMonth))
+			recurring.IntervalCount = stripe.Int64(3)
 		case "yearly":
-			stripeInterval = stripe.PriceRecurringIntervalYear
+			recurring.Interval = stripe.String(string(stripe.PriceRecurringIntervalYear))
 		default:
 			return fmt.Errorf("unsupported interval: %s", interval)
 		}
-		params.Recurring = &stripe.PriceRecurringParams{
-			Interval: stripe.String(string(stripeInterval)),
+
+		// Add trial period if specified
+		if trialDays > 0 {
+			recurring.TrialPeriodDays = stripe.Int64(int64(trialDays))
 		}
+
+		// For per-unit pricing: use "licensed" (quantity set at subscription time)
+		// "metered" requires a Meter object (for usage reporting)
+		if priceType == "per_unit" {
+			recurring.UsageType = stripe.String("licensed")
+		}
+
+		params.Recurring = recurring
 	}
 
 	_, err := price.New(params)
 	if err != nil {
-		return fmt.Errorf("failed to create price: %w", err)
+		return fmt.Errorf("failed to create %s price: %w", priceType, err)
 	}
 	result.PricesCreated++
 

@@ -4,30 +4,93 @@ package config
 type BillingConfig struct {
 	Version      int                    `yaml:"version" json:"version"`
 	Providers    []string               `yaml:"providers" json:"providers"`
+	Settings     *Settings              `yaml:"settings,omitempty" json:"settings,omitempty"`
 	Entitlements map[string]Entitlement `yaml:"entitlements" json:"entitlements"`
 	Plans        []Plan                 `yaml:"plans" json:"plans"`
 	Addons       []Addon                `yaml:"addons" json:"addons"`
 	Promotions   []Promotion            `yaml:"promotions" json:"promotions"`
 }
 
+// Settings contains global billing settings
+type Settings struct {
+	Currency  string `yaml:"currency,omitempty" json:"currency,omitempty"`
+	TrialDays int    `yaml:"trial_days,omitempty" json:"trial_days,omitempty"`
+	GraceDays int    `yaml:"grace_days,omitempty" json:"grace_days,omitempty"`
+}
+
 // Entitlement defines a feature or limit that can be granted
 type Entitlement struct {
-	Type string `yaml:"type" json:"type"`
-	Unit string `yaml:"unit" json:"unit"`
+	Type        string `yaml:"type" json:"type"`
+	Unit        string `yaml:"unit,omitempty" json:"unit,omitempty"`
+	Description string `yaml:"description,omitempty" json:"description,omitempty"`
 }
 
 // Plan represents a pricing plan
 type Plan struct {
-	ID     string           `yaml:"id" json:"id"`
-	Name   string           `yaml:"name" json:"name"`
-	Prices map[string]Price `yaml:"prices" json:"prices"`
-	Limits map[string]any   `yaml:"limits" json:"limits"`
+	ID          string           `yaml:"id" json:"id"`
+	Name        string           `yaml:"name" json:"name"`
+	Description string           `yaml:"description,omitempty" json:"description,omitempty"`
+	Headline    string           `yaml:"headline,omitempty" json:"headline,omitempty"`
+	Type        string           `yaml:"type,omitempty" json:"type,omitempty"` // personal, team, enterprise
+	Public      *bool            `yaml:"public,omitempty" json:"public,omitempty"`
+	Default     bool             `yaml:"default,omitempty" json:"default,omitempty"`
+	TrialDays   int              `yaml:"trial_days,omitempty" json:"trial_days,omitempty"`
+	Prices      map[string]Price `yaml:"prices" json:"prices"`
+	Limits      map[string]any   `yaml:"limits,omitempty" json:"limits,omitempty"`
+	Features    []string         `yaml:"features,omitempty" json:"features,omitempty"`
+	UpgradesTo  []string         `yaml:"upgrades_to,omitempty" json:"upgrades_to,omitempty"`
+	Metadata    map[string]any   `yaml:"metadata,omitempty" json:"metadata,omitempty"`
 }
 
-// Price represents a price point for a plan
+// Price represents a price point for a plan (supports flat, per_unit, and tiered)
 type Price struct {
-	Amount   int    `yaml:"amount" json:"amount"`
-	Currency string `yaml:"currency,omitempty" json:"currency,omitempty"`
+	// Flat price
+	Amount         int                `yaml:"amount,omitempty" json:"amount,omitempty"`
+	CurrencyPrices map[string]int     `yaml:"currency_prices,omitempty" json:"currency_prices,omitempty"`
+
+	// Per-unit price (usage-based)
+	PerUnit  int    `yaml:"per_unit,omitempty" json:"per_unit,omitempty"`
+	Unit     string `yaml:"unit,omitempty" json:"unit,omitempty"`
+	Min      int    `yaml:"min,omitempty" json:"min,omitempty"`
+	Max      int    `yaml:"max,omitempty" json:"max,omitempty"`
+	Included int    `yaml:"included,omitempty" json:"included,omitempty"`
+
+	// Tiered price
+	Tiers []PriceTier `yaml:"tiers,omitempty" json:"tiers,omitempty"`
+	Mode  string      `yaml:"mode,omitempty" json:"mode,omitempty"` // graduated, volume
+}
+
+// PriceTier represents a tier in tiered pricing
+type PriceTier struct {
+	UpTo   any `yaml:"up_to" json:"up_to"` // int or "unlimited"
+	Amount int `yaml:"amount,omitempty" json:"amount,omitempty"`
+	Flat   int `yaml:"flat,omitempty" json:"flat,omitempty"`
+}
+
+// PriceType returns the type of price: "flat", "per_unit", or "tiered"
+func (p *Price) PriceType() string {
+	if len(p.Tiers) > 0 {
+		return "tiered"
+	}
+	if p.PerUnit > 0 {
+		return "per_unit"
+	}
+	return "flat"
+}
+
+// GetTierUpTo returns the up_to value as int64, or -1 for unlimited
+func (t *PriceTier) GetTierUpTo() int64 {
+	switch v := t.UpTo.(type) {
+	case int:
+		return int64(v)
+	case float64:
+		return int64(v)
+	case string:
+		if v == "unlimited" {
+			return -1
+		}
+	}
+	return 0
 }
 
 // Addon represents an add-on that can be purchased
