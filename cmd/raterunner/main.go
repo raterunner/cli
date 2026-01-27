@@ -423,7 +423,7 @@ func truncateAction(c *cli.Context) error {
 		fmt.Fprint(consoleOut, "Are you sure? [y/N]: ")
 
 		var response string
-		fmt.Scanln(&response)
+		_, _ = fmt.Scanln(&response) // Error ignored: empty response treated as "no"
 		response = strings.ToLower(strings.TrimSpace(response))
 
 		if response != "y" && response != "yes" {
