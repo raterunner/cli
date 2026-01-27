@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,6 +20,13 @@ func main() {
 		Name:    "raterunner",
 		Usage:   "Raterunner CLI - billing configuration management",
 		Version: "0.1.0",
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:    "quiet",
+				Aliases: []string{"q"},
+				Usage:   "Suppress non-essential output (errors still shown)",
+			},
+		},
 		Commands: []*cli.Command{
 			{
 				Name:      "validate",
@@ -81,10 +89,38 @@ func main() {
 				Flags: []cli.Flag{
 					&cli.BoolFlag{
 						Name:  "confirm",
-						Usage: "Confirm the operation (required)",
+						Usage: "Skip interactive confirmation (for CI/CD)",
 					},
 				},
 				Action: truncateAction,
+			},
+			{
+				Name:  "config",
+				Usage: "Manage CLI configuration",
+				Subcommands: []*cli.Command{
+					{
+						Name:      "set",
+						Usage:     "Set a configuration value",
+						ArgsUsage: "<key> <value>",
+						Action:    configSetAction,
+					},
+					{
+						Name:      "get",
+						Usage:     "Get a configuration value",
+						ArgsUsage: "<key>",
+						Action:    configGetAction,
+					},
+					{
+						Name:   "list",
+						Usage:  "List all configuration values",
+						Action: configListAction,
+					},
+					{
+						Name:   "path",
+						Usage:  "Show configuration file path",
+						Action: configPathAction,
+					},
+				},
 			},
 		},
 	}
@@ -127,21 +163,24 @@ func validateAction(c *cli.Context) error {
 		return err
 	}
 
-	out := c.App.Writer
-	if out == nil {
-		out = os.Stdout
-	}
+	out := getOutput(c)
 
 	if result.Valid {
 		fmt.Fprintf(out, "✓ %s is valid\n", filePath)
 		return nil
 	}
 
-	fmt.Fprintf(out, "✗ %s has %d validation error(s):\n\n", filePath, len(result.Errors))
-	for i, e := range result.Errors {
-		fmt.Fprintf(out, "  %d. %s\n", i+1, e.String())
+	// Errors always shown (even in quiet mode)
+	errOut := c.App.Writer
+	if errOut == nil {
+		errOut = os.Stdout
 	}
-	fmt.Fprintln(out)
+
+	fmt.Fprintf(errOut, "✗ %s has %d validation error(s):\n\n", filePath, len(result.Errors))
+	for i, e := range result.Errors {
+		fmt.Fprintf(errOut, "  %d. %s\n", i+1, e.String())
+	}
+	fmt.Fprintln(errOut)
 
 	return cli.Exit("", 1)
 }
@@ -168,10 +207,7 @@ func applyAction(c *cli.Context) error {
 	dryRun := c.Bool("dry-run")
 	jsonOutput := c.Bool("json")
 
-	out := c.App.Writer
-	if out == nil {
-		out = os.Stdout
-	}
+	out := getOutput(c)
 
 	// Validate environment
 	var stripeEnv stripe.Environment
@@ -254,10 +290,7 @@ func importAction(c *cli.Context) error {
 	env := c.String("env")
 	outputPath := c.String("output")
 
-	out := c.App.Writer
-	if out == nil {
-		out = os.Stdout
-	}
+	out := getOutput(c)
 
 	// Validate environment
 	var stripeEnv stripe.Environment
@@ -346,18 +379,50 @@ func getAPIKey(env stripe.Environment) (string, error) {
 	return key, nil
 }
 
-func truncateAction(c *cli.Context) error {
+// isQuiet checks if quiet mode is enabled via flag or saved config
+func isQuiet(c *cli.Context) bool {
+	if c.Bool("quiet") {
+		return true
+	}
+	settings, err := config.LoadSettings()
+	if err != nil {
+		return false
+	}
+	return settings.Quiet
+}
+
+// getOutput returns the appropriate writer (discard if quiet, otherwise stdout)
+func getOutput(c *cli.Context) io.Writer {
+	if isQuiet(c) {
+		return io.Discard
+	}
 	out := c.App.Writer
 	if out == nil {
 		out = os.Stdout
 	}
+	return out
+}
 
+func truncateAction(c *cli.Context) error {
+	out := getOutput(c)
+
+	// Interactive confirmation always shown (even in quiet mode)
 	if !c.Bool("confirm") {
-		fmt.Fprintln(out, "WARNING: This will archive ALL products, prices, and delete coupons in your Stripe sandbox account.")
-		fmt.Fprintln(out, "")
-		fmt.Fprintln(out, "To proceed, run:")
-		fmt.Fprintln(out, "  raterunner truncate --confirm")
-		return cli.Exit("", 1)
+		consoleOut := c.App.Writer
+		if consoleOut == nil {
+			consoleOut = os.Stdout
+		}
+		fmt.Fprintln(consoleOut, "WARNING: This will archive ALL products, prices, and delete coupons in your Stripe sandbox account.")
+		fmt.Fprint(consoleOut, "Are you sure? [y/N]: ")
+
+		var response string
+		fmt.Scanln(&response)
+		response = strings.ToLower(strings.TrimSpace(response))
+
+		if response != "y" && response != "yes" {
+			fmt.Fprintln(consoleOut, "Aborted.")
+			return nil
+		}
 	}
 
 	// Get API key - only sandbox is allowed
@@ -381,5 +446,70 @@ func truncateAction(c *cli.Context) error {
 
 	fmt.Fprintf(out, "Done. Archived %d prices, %d products. Deleted %d coupons.\n",
 		result.PricesArchived, result.ProductsArchived, result.CouponsDeleted)
+	return nil
+}
+
+func configSetAction(c *cli.Context) error {
+	if c.NArg() < 2 {
+		return fmt.Errorf("usage: raterunner config set <key> <value>")
+	}
+
+	key := c.Args().Get(0)
+	value := c.Args().Get(1)
+
+	settings, err := config.LoadSettings()
+	if err != nil {
+		return fmt.Errorf("failed to load settings: %w", err)
+	}
+
+	switch key {
+	case "quiet":
+		settings.Quiet = value == "true" || value == "1" || value == "yes"
+	default:
+		return fmt.Errorf("unknown config key: %s (available: quiet)", key)
+	}
+
+	if err := config.SaveSettings(settings); err != nil {
+		return fmt.Errorf("failed to save settings: %w", err)
+	}
+
+	fmt.Printf("Set %s = %s\n", key, value)
+	return nil
+}
+
+func configGetAction(c *cli.Context) error {
+	if c.NArg() < 1 {
+		return fmt.Errorf("usage: raterunner config get <key>")
+	}
+
+	key := c.Args().Get(0)
+
+	settings, err := config.LoadSettings()
+	if err != nil {
+		return fmt.Errorf("failed to load settings: %w", err)
+	}
+
+	switch key {
+	case "quiet":
+		fmt.Printf("%v\n", settings.Quiet)
+	default:
+		return fmt.Errorf("unknown config key: %s (available: quiet)", key)
+	}
+
+	return nil
+}
+
+func configListAction(c *cli.Context) error {
+	settings, err := config.LoadSettings()
+	if err != nil {
+		return fmt.Errorf("failed to load settings: %w", err)
+	}
+
+	fmt.Printf("quiet = %v\n", settings.Quiet)
+	return nil
+}
+
+func configPathAction(c *cli.Context) error {
+	fmt.Println(config.DefaultSettingsPath())
 	return nil
 }

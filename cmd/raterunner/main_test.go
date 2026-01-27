@@ -319,11 +319,13 @@ func TestImport_MissingAPIKey(t *testing.T) {
 // --- Truncate command tests ---
 
 func TestTruncate_WithoutConfirm(t *testing.T) {
+	// Without --confirm, prompts user and aborts if no input (empty stdin in tests)
 	stdout, _, exitCode := runApp("truncate")
 
-	assertExitCode(t, 1, exitCode)
+	assertExitCode(t, 0, exitCode) // Graceful abort = exit 0
 	assertContains(t, stdout, "WARNING")
-	assertContains(t, stdout, "raterunner truncate --confirm")
+	assertContains(t, stdout, "Are you sure?")
+	assertContains(t, stdout, "Aborted")
 }
 
 func TestTruncate_MissingAPIKey(t *testing.T) {
