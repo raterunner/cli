@@ -15,11 +15,18 @@ import (
 	"raterunner/internal/validator"
 )
 
+// Build information (set by goreleaser via ldflags)
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
 func main() {
 	app := &cli.App{
 		Name:    "raterunner",
 		Usage:   "Raterunner CLI - billing configuration management",
-		Version: "0.1.0",
+		Version: fmt.Sprintf("%s (commit: %s, built: %s)", version, commit, date),
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:    "quiet",

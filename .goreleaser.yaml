@@ -1,0 +1,115 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
+project_name: raterunner
+
+before:
+  hooks:
+    - go mod tidy
+    - make generate
+
+builds:
+  - id: raterunner
+    main: ./cmd/raterunner
+    binary: raterunner
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+      - Merge pull request
+      - Merge branch
+
+release:
+  github:
+    owner: raterunner
+    name: cli
+  draft: false
+  prerelease: auto
+  name_template: "v{{.Version}}"
+
+brews:
+  - name: raterunner
+    repository:
+      owner: raterunner
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/raterunner/cli"
+    description: "CLI tool for managing SaaS billing configurations as code"
+    license: "MIT"
+    install: |
+      bin.install "raterunner"
+    test: |
+      system "#{bin}/raterunner", "--version"
+
+nfpms:
+  - id: packages
+    package_name: raterunner
+    vendor: Raterunner
+    homepage: https://github.com/raterunner/cli
+    maintainer: Andrey Korchak <raterunner@akorchak.software>
+    description: CLI tool for managing SaaS billing configurations as code
+    license: MIT
+    formats:
+      - deb
+      - rpm
+      - apk
+    bindir: /usr/bin
+
+# Snapcraft disabled - requires snapcraft CLI
+# snapcrafts:
+#   - id: snap
+#     name: raterunner
+#     publish: true
+#     summary: CLI tool for managing SaaS billing configurations as code
+#     description: |
+#       Raterunner is a command-line tool for managing SaaS billing configurations as code.
+#       Define your pricing plans, entitlements, and promotions in YAML, then sync them to payment providers.
+#     grade: stable
+#     confinement: strict
+#     license: MIT
+#     apps:
+#       raterunner:
+#         command: raterunner
+#         plugs:
+#           - home
+#           - network
+
+announce:
+  skip: true

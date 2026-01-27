@@ -1,4 +1,4 @@
-.PHONY: build generate test test-integration clean
+.PHONY: build generate test test-integration clean release-check release-snapshot lint
 
 # Copy schemas from submodule for embedding
 generate:
@@ -22,5 +22,25 @@ test-integration: build
 
 # Clean build artifacts
 clean:
-	rm -rf bin/
+	rm -rf bin/ dist/
 	rm -f internal/schema/*.json
+
+# Lint code
+lint:
+	golangci-lint run
+
+# Check GoReleaser config
+release-check: generate
+	goreleaser check
+
+# Build release locally (without publishing)
+release-snapshot: generate
+	goreleaser release --snapshot --clean --skip=publish
+
+# Create a new release (use: make release VERSION=v0.1.0)
+release:
+ifndef VERSION
+	$(error VERSION is required. Usage: make release VERSION=v0.1.0)
+endif
+	git tag -a $(VERSION) -m "Release $(VERSION)"
+	git push origin $(VERSION)

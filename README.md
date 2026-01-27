@@ -44,18 +44,71 @@ plans:
 
 ## Installation
 
+### Homebrew (macOS/Linux)
+
+```bash
+brew install raterunner/tap/raterunner
+```
+
+### Download binary
+
+Download the latest release from [GitHub Releases](https://github.com/raterunner/cli/releases):
+
+```bash
+# macOS (Apple Silicon)
+curl -Lo raterunner.tar.gz https://github.com/raterunner/cli/releases/latest/download/raterunner_Darwin_arm64.tar.gz
+tar -xzf raterunner.tar.gz
+sudo mv raterunner /usr/local/bin/
+
+# macOS (Intel)
+curl -Lo raterunner.tar.gz https://github.com/raterunner/cli/releases/latest/download/raterunner_Darwin_amd64.tar.gz
+tar -xzf raterunner.tar.gz
+sudo mv raterunner /usr/local/bin/
+
+# Linux (x86_64)
+curl -Lo raterunner.tar.gz https://github.com/raterunner/cli/releases/latest/download/raterunner_Linux_amd64.tar.gz
+tar -xzf raterunner.tar.gz
+sudo mv raterunner /usr/local/bin/
+
+# Linux (ARM64)
+curl -Lo raterunner.tar.gz https://github.com/raterunner/cli/releases/latest/download/raterunner_Linux_arm64.tar.gz
+tar -xzf raterunner.tar.gz
+sudo mv raterunner /usr/local/bin/
+```
+
+### Linux packages
+
+```bash
+# Debian/Ubuntu
+curl -Lo raterunner.deb https://github.com/raterunner/cli/releases/latest/download/raterunner_amd64.deb
+sudo dpkg -i raterunner.deb
+
+# RHEL/Fedora
+curl -Lo raterunner.rpm https://github.com/raterunner/cli/releases/latest/download/raterunner_amd64.rpm
+sudo rpm -i raterunner.rpm
+
+# Alpine
+curl -Lo raterunner.apk https://github.com/raterunner/cli/releases/latest/download/raterunner_amd64.apk
+sudo apk add --allow-untrusted raterunner.apk
+```
+
+### Go install
+
+```bash
+go install github.com/raterunner/cli/cmd/raterunner@latest
+```
+
 ### From source
 
 ```bash
 git clone https://github.com/raterunner/cli.git
 cd cli
 make build
-./bin/raterunner --help
+sudo mv bin/raterunner /usr/local/bin/
 ```
 
 ### Requirements
 
-- Go 1.23+
 - Stripe API keys (for sync operations)
 
 ## Quick Start
