@@ -34,7 +34,7 @@ func runApp(args ...string) (stdout, stderr string, exitCode int) {
 			},
 			{
 				Name:      "apply",
-				Usage:     "Compare local billing config with remote Stripe state",
+				Usage:     "Sync local billing config to Stripe",
 				ArgsUsage: "<billing.yaml>",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
@@ -44,9 +44,8 @@ func runApp(args ...string) (stdout, stderr string, exitCode int) {
 						Required: true,
 					},
 					&cli.BoolFlag{
-						Name:     "dry-run",
-						Usage:    "Preview changes without applying (required for now)",
-						Required: true,
+						Name:  "dry-run",
+						Usage: "Preview changes without applying",
 					},
 					&cli.BoolFlag{
 						Name:    "json",
@@ -55,6 +54,25 @@ func runApp(args ...string) (stdout, stderr string, exitCode int) {
 					},
 				},
 				Action: applyAction,
+			},
+			{
+				Name:  "import",
+				Usage: "Import products and prices from Stripe to a local YAML file",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:     "env",
+						Aliases:  []string{"e"},
+						Usage:    "Environment: sandbox or production",
+						Required: true,
+					},
+					&cli.StringFlag{
+						Name:     "output",
+						Aliases:  []string{"o"},
+						Usage:    "Output file path",
+						Required: true,
+					},
+				},
+				Action: importAction,
 			},
 			{
 				Name:  "truncate",
@@ -217,17 +235,10 @@ func TestApply_NoArguments(t *testing.T) {
 }
 
 func TestApply_MissingEnvFlag(t *testing.T) {
-	stdout, _, exitCode := runApp("apply", "testdata/valid/billing_full.yaml", "--dry-run")
+	stdout, _, exitCode := runApp("apply", "--dry-run", "testdata/valid/billing_full.yaml")
 
 	assertExitCode(t, 1, exitCode)
 	assertContains(t, stdout, "env")
-}
-
-func TestApply_MissingDryRunFlag(t *testing.T) {
-	stdout, _, exitCode := runApp("apply", "testdata/valid/billing_full.yaml", "--env", "sandbox")
-
-	assertExitCode(t, 1, exitCode)
-	assertContains(t, stdout, "dry-run")
 }
 
 func TestApply_InvalidEnv(t *testing.T) {
@@ -271,6 +282,38 @@ func TestApply_WrongKeyPrefix(t *testing.T) {
 
 	assertExitCode(t, 1, exitCode)
 	assertContains(t, stdout, "sandbox environment requires a test key")
+}
+
+// --- Import command tests ---
+
+func TestImport_MissingEnvFlag(t *testing.T) {
+	stdout, _, exitCode := runApp("import", "--output", "/tmp/test.yaml")
+
+	assertExitCode(t, 1, exitCode)
+	assertContains(t, stdout, "env")
+}
+
+func TestImport_MissingOutputFlag(t *testing.T) {
+	stdout, _, exitCode := runApp("import", "--env", "sandbox")
+
+	assertExitCode(t, 1, exitCode)
+	assertContains(t, stdout, "output")
+}
+
+func TestImport_InvalidEnv(t *testing.T) {
+	stdout, _, exitCode := runApp("import", "--env", "staging", "--output", "/tmp/test.yaml")
+
+	assertExitCode(t, 1, exitCode)
+	assertContains(t, stdout, "invalid environment")
+}
+
+func TestImport_MissingAPIKey(t *testing.T) {
+	os.Unsetenv("STRIPE_SANDBOX_KEY")
+
+	stdout, _, exitCode := runApp("import", "--env", "sandbox", "--output", "/tmp/test.yaml")
+
+	assertExitCode(t, 1, exitCode)
+	assertContains(t, stdout, "STRIPE_SANDBOX_KEY")
 }
 
 // --- Truncate command tests ---

@@ -33,9 +33,9 @@ func main() {
 				},
 				Action: validateAction,
 			},
-			{
+				{
 				Name:      "apply",
-				Usage:     "Compare local billing config with remote Stripe state",
+				Usage:     "Sync local billing config to Stripe (creates/updates products and prices)",
 				ArgsUsage: "<billing.yaml>",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
@@ -45,17 +45,35 @@ func main() {
 						Required: true,
 					},
 					&cli.BoolFlag{
-						Name:     "dry-run",
-						Usage:    "Preview changes without applying (required for now)",
-						Required: true,
+						Name:  "dry-run",
+						Usage: "Preview changes without applying",
 					},
 					&cli.BoolFlag{
 						Name:    "json",
 						Aliases: []string{"j"},
-						Usage:   "Output as JSON instead of table",
+						Usage:   "Output as JSON instead of table (only with --dry-run)",
 					},
 				},
 				Action: applyAction,
+			},
+			{
+				Name:  "import",
+				Usage: "Import products and prices from Stripe to a local YAML file",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:     "env",
+						Aliases:  []string{"e"},
+						Usage:    "Environment: sandbox or production",
+						Required: true,
+					},
+					&cli.StringFlag{
+						Name:     "output",
+						Aliases:  []string{"o"},
+						Usage:    "Output file path",
+						Required: true,
+					},
+				},
+				Action: importAction,
 			},
 			{
 				Name:  "truncate",
@@ -147,6 +165,7 @@ func applyAction(c *cli.Context) error {
 
 	filePath := c.Args().First()
 	env := c.String("env")
+	dryRun := c.Bool("dry-run")
 	jsonOutput := c.Bool("json")
 
 	out := c.App.Writer
@@ -188,29 +207,93 @@ func applyAction(c *cli.Context) error {
 		return fmt.Errorf("failed to create Stripe client: %w", err)
 	}
 
-	// Fetch products with prices from Stripe
-	products, err := client.FetchProductsWithPrices()
-	if err != nil {
-		return fmt.Errorf("failed to fetch from Stripe: %w", err)
-	}
-
-	// Compare
-	result := diff.Compare(cfg, products, env)
-
-	// Output
-	if jsonOutput {
-		if err := diff.OutputJSON(out, result); err != nil {
-			return fmt.Errorf("failed to write JSON output: %w", err)
+	if dryRun {
+		// Dry run: just compare and show differences
+		products, err := client.FetchProductsWithPrices()
+		if err != nil {
+			return fmt.Errorf("failed to fetch from Stripe: %w", err)
 		}
-	} else {
-		diff.OutputTable(out, result)
+
+		result := diff.Compare(cfg, products, env)
+
+		if jsonOutput {
+			if err := diff.OutputJSON(out, result); err != nil {
+				return fmt.Errorf("failed to write JSON output: %w", err)
+			}
+		} else {
+			diff.OutputTable(out, result)
+		}
+
+		if result.HasDifferences() {
+			return cli.Exit("", 1)
+		}
+		return nil
 	}
 
-	// Exit with code 1 if there are differences
-	if result.HasDifferences() {
-		return cli.Exit("", 1)
+	// Actual apply: sync to Stripe
+	fmt.Fprintf(out, "Syncing billing config to Stripe (%s)...\n", env)
+
+	result, err := client.Sync(cfg)
+	if err != nil {
+		return fmt.Errorf("sync failed: %w", err)
 	}
 
+	// Print warnings
+	for _, w := range result.Warnings {
+		fmt.Fprintf(out, "  WARNING: %s\n", w)
+	}
+
+	fmt.Fprintf(out, "Done. Created %d products, %d prices. Archived %d prices.\n",
+		result.ProductsCreated, result.PricesCreated, result.PricesArchived)
+
+	return nil
+}
+
+func importAction(c *cli.Context) error {
+	env := c.String("env")
+	outputPath := c.String("output")
+
+	out := c.App.Writer
+	if out == nil {
+		out = os.Stdout
+	}
+
+	// Validate environment
+	var stripeEnv stripe.Environment
+	switch env {
+	case "sandbox":
+		stripeEnv = stripe.Sandbox
+	case "production":
+		stripeEnv = stripe.Production
+	default:
+		return fmt.Errorf("invalid environment: %s (use 'sandbox' or 'production')", env)
+	}
+
+	// Get API key from environment
+	apiKey, err := getAPIKey(stripeEnv)
+	if err != nil {
+		return err
+	}
+
+	// Create Stripe client
+	client, err := stripe.NewClient(stripeEnv, apiKey)
+	if err != nil {
+		return fmt.Errorf("failed to create Stripe client: %w", err)
+	}
+
+	fmt.Fprintf(out, "Importing from Stripe (%s)...\n", env)
+
+	cfg, err := client.Import()
+	if err != nil {
+		return fmt.Errorf("import failed: %w", err)
+	}
+
+	// Write to file
+	if err := config.SaveBillingFile(outputPath, cfg); err != nil {
+		return fmt.Errorf("failed to save file: %w", err)
+	}
+
+	fmt.Fprintf(out, "Imported %d plans to %s\n", len(cfg.Plans), outputPath)
 	return nil
 }
 

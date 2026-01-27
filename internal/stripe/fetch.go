@@ -27,12 +27,13 @@ type ProductPrice struct {
 	Active   bool
 }
 
-// FetchProducts retrieves all products from Stripe
+// FetchProducts retrieves all active products from Stripe
 func (c *Client) FetchProducts() ([]Product, error) {
 	var products []Product
 
 	params := &stripe.ProductListParams{}
 	params.Filters.AddFilter("limit", "", "100")
+	params.Filters.AddFilter("active", "", "true")
 
 	iter := product.List(params)
 	for iter.Next() {
@@ -118,20 +119,21 @@ func (c *Client) FetchProductsWithPrices() ([]Product, error) {
 	return products, nil
 }
 
-// MatchProduct finds a Stripe product that matches the given plan ID.
+// MatchProduct finds an active Stripe product that matches the given plan ID.
 // It first checks for plan_code metadata match, then falls back to name matching.
+// Only active products are considered - archived products are ignored.
 func MatchProduct(products []Product, planID, planName string) *Product {
-	// Primary: match by plan_code metadata
+	// Primary: match by plan_code metadata (active only)
 	for i := range products {
-		if products[i].PlanCode == planID {
+		if products[i].Active && products[i].PlanCode == planID {
 			return &products[i]
 		}
 	}
 
-	// Fallback: match by normalized name
+	// Fallback: match by normalized name (active only)
 	normalizedPlanID := normalizeName(planID)
 	for i := range products {
-		if normalizeName(products[i].Name) == normalizedPlanID {
+		if products[i].Active && normalizeName(products[i].Name) == normalizedPlanID {
 			return &products[i]
 		}
 	}

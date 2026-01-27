@@ -28,3 +28,17 @@ func LoadBillingFile(filePath string) (*BillingConfig, error) {
 
 	return &config, nil
 }
+
+// SaveBillingFile saves a billing configuration to a YAML file
+func SaveBillingFile(filePath string, cfg *BillingConfig) error {
+	content, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal YAML: %w", err)
+	}
+
+	if err := os.WriteFile(filePath, content, 0644); err != nil {
+		return fmt.Errorf("failed to write file: %w", err)
+	}
+
+	return nil
+}
