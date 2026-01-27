@@ -99,17 +99,29 @@ sudo mv bin/raterunner /usr/local/bin/
 
 ## Quick Start
 
-### 1. Create a billing configuration
+### 1. Initialize a new project
+
+```bash
+raterunner init
+```
+
+This creates a `raterunner/` directory with a sample `billing.yaml`:
+
+```
+your-project/
+└── raterunner/
+    └── billing.yaml    # Your billing configuration
+```
+
+### 2. Edit billing.yaml
+
+Customize the generated configuration for your needs:
 
 ```yaml
-# billing.yaml
+# raterunner/billing.yaml
 version: 1
 providers:
   - stripe
-
-settings:
-  currency: usd
-  trial_days: 14
 
 entitlements:
   seats:
@@ -139,68 +151,140 @@ plans:
       api_calls: 50000
 ```
 
-### 2. Validate the configuration
+### 3. Validate the configuration
 
 ```bash
-raterunner validate billing.yaml
+raterunner validate raterunner/billing.yaml
 ```
 
-### 3. Preview changes (dry run)
+### 4. Preview changes (dry run)
 
 ```bash
 export STRIPE_SANDBOX_KEY=sk_test_...
-raterunner apply --env sandbox --dry-run billing.yaml
+raterunner apply --env sandbox --dry-run raterunner/billing.yaml
 ```
 
-### 4. Apply to Stripe
+### 5. Apply to Stripe
 
 ```bash
-raterunner apply --env sandbox billing.yaml
+raterunner apply --env sandbox raterunner/billing.yaml
 ```
+
+After applying, Raterunner creates a **provider file** with Stripe IDs:
+
+```
+your-project/
+└── raterunner/
+    ├── billing.yaml           # Your billing configuration (source of truth)
+    └── stripe_sandbox.yaml    # Generated: Stripe IDs for sandbox
+```
+
+The provider file maps your plan IDs to Stripe product/price IDs:
+
+```yaml
+# raterunner/stripe_sandbox.yaml (auto-generated)
+provider: stripe
+environment: sandbox
+synced_at: "2024-01-15T10:30:00Z"
+plans:
+  free:
+    product_id: prod_ABC123
+    prices:
+      monthly: price_XYZ789
+  pro:
+    product_id: prod_DEF456
+    prices:
+      monthly: price_UVW012
+      yearly: price_RST345
+```
+
+**Why provider files?**
+
+- **ID tracking** — know which Stripe objects correspond to your plans
+- **Environment isolation** — separate IDs for sandbox vs production
+- **Debugging** — quickly find Stripe objects when troubleshooting
+- **Commit to Git** — track ID mappings alongside your billing config
 
 ## Commands
 
-### `validate`
+### `init`
 
-Validate a billing configuration against the JSON Schema.
+Initialize a new billing configuration with example plans.
 
 ```bash
-raterunner validate billing.yaml
-raterunner validate provider_stripe.yaml
+raterunner init              # Creates raterunner/billing.yaml in current directory
+raterunner init ./my-app     # Creates my-app/raterunner/billing.yaml
+raterunner init --force      # Overwrite existing files
+```
+
+The generated `billing.yaml` includes:
+- Free, Pro, and Enterprise plan templates
+- Example entitlements (projects, API calls, support)
+- Comments with documentation links
+
+### `validate`
+
+Validate a billing or provider configuration against the JSON Schema.
+
+```bash
+raterunner validate raterunner/billing.yaml
+raterunner validate raterunner/stripe_sandbox.yaml
 ```
 
 ### `apply`
 
-Sync billing configuration to Stripe.
+Sync billing configuration to Stripe. Creates products, prices, coupons, and promotion codes.
 
 ```bash
-# Preview changes
-raterunner apply --env sandbox --dry-run billing.yaml
+# Preview changes (no writes to Stripe)
+raterunner apply --env sandbox --dry-run raterunner/billing.yaml
 
-# Apply changes
-raterunner apply --env sandbox billing.yaml
-raterunner apply --env production billing.yaml
+# Apply changes to sandbox
+raterunner apply --env sandbox raterunner/billing.yaml
+# → Creates raterunner/stripe_sandbox.yaml with Stripe IDs
+
+# Apply to production
+raterunner apply --env production raterunner/billing.yaml
+# → Creates raterunner/stripe_production.yaml
 
 # Output diff as JSON
-raterunner apply --env sandbox --dry-run --json billing.yaml
+raterunner apply --env sandbox --dry-run --json raterunner/billing.yaml
 ```
+
+**Stripe API used:**
+- `POST /v1/products` — create products for plans and addons
+- `POST /v1/prices` — create prices (flat, per-unit, tiered)
+- `POST /v1/coupons` — create discount coupons
+- `POST /v1/promotion_codes` — create promotion codes
+- `POST /v1/prices/{id}` — archive old prices when amounts change
 
 ### `import`
 
-Import existing Stripe products/prices to a YAML file.
+Import existing Stripe products/prices to YAML files. Useful for migrating existing Stripe setup to Raterunner.
 
 ```bash
-raterunner import --env sandbox --output imported.yaml
+raterunner import --env sandbox --output raterunner/billing.yaml
+# → Creates raterunner/billing.yaml (billing config)
+# → Creates raterunner/stripe_sandbox.yaml (provider IDs)
 ```
+
+**Stripe API used:**
+- `GET /v1/products` — fetch all products
+- `GET /v1/prices` — fetch all prices
 
 ### `truncate`
 
-Archive all products and prices in Stripe sandbox (useful for testing).
+Archive all products and prices in Stripe sandbox (useful for testing). **Sandbox only** — refuses to run against production.
 
 ```bash
 raterunner truncate           # Interactive confirmation
 raterunner truncate --confirm # Skip confirmation (for CI/CD)
 ```
+
+**Stripe API used:**
+- `POST /v1/prices/{id}` — archive prices (set `active: false`)
+- `POST /v1/products/{id}` — archive products (set `active: false`)
+- `DELETE /v1/coupons/{id}` — delete coupons
 
 ### `config`
 
@@ -227,6 +311,30 @@ raterunner config path             # Show config file path
 |----------|-------------|
 | `STRIPE_SANDBOX_KEY` | Stripe test API key (`sk_test_...`) |
 | `STRIPE_PRODUCTION_KEY` | Stripe live API key (`sk_live_...`) |
+
+## File Structure
+
+A typical Raterunner setup in your project:
+
+```
+your-project/
+├── raterunner/
+│   ├── billing.yaml           # Source of truth: plans, prices, entitlements
+│   ├── stripe_sandbox.yaml    # Auto-generated: Stripe IDs for sandbox
+│   └── stripe_production.yaml # Auto-generated: Stripe IDs for production
+└── ... your app code
+```
+
+| File | Purpose | Git? |
+|------|---------|------|
+| `billing.yaml` | Your billing configuration (plans, prices, entitlements) | Yes |
+| `stripe_sandbox.yaml` | Stripe IDs for test environment | Yes |
+| `stripe_production.yaml` | Stripe IDs for live environment | Yes |
+
+**All files should be committed to Git** — this gives you full history of:
+- What plans existed at any point in time
+- Which Stripe objects were created for each environment
+- When syncs happened (`synced_at` timestamp)
 
 ## Configuration Schema
 

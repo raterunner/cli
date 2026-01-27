@@ -1,20 +1,35 @@
 package stripe
 
 import (
+	"time"
+
 	"raterunner/internal/config"
 )
 
-// Import fetches all products and prices from Stripe and converts to BillingConfig
-func (c *Client) Import() (*config.BillingConfig, error) {
+// ImportResult contains both the billing config and provider ID mapping
+type ImportResult struct {
+	Billing  *config.BillingConfig
+	Provider *config.ProviderConfig
+}
+
+// Import fetches all products and prices from Stripe and converts to BillingConfig and ProviderConfig
+func (c *Client) Import() (*ImportResult, error) {
 	products, err := c.FetchProductsWithPrices()
 	if err != nil {
 		return nil, err
 	}
 
-	cfg := &config.BillingConfig{
+	billing := &config.BillingConfig{
 		Version:   1,
 		Providers: []string{"stripe"},
 		Plans:     make([]config.Plan, 0, len(products)),
+	}
+
+	provider := &config.ProviderConfig{
+		Provider:    "stripe",
+		Environment: string(c.env),
+		SyncedAt:    time.Now().UTC().Format(time.RFC3339),
+		Plans:       make(map[string]config.PlanIDs),
 	}
 
 	for _, prod := range products {
@@ -22,10 +37,17 @@ func (c *Client) Import() (*config.BillingConfig, error) {
 			continue
 		}
 
+		planID := planIDFromProduct(prod)
 		plan := config.Plan{
-			ID:     planIDFromProduct(prod),
+			ID:     planID,
 			Name:   prod.Name,
 			Prices: make(map[string]config.Price),
+		}
+
+		// Track provider IDs
+		planIDs := config.PlanIDs{
+			ProductID: prod.ID,
+			Prices:    make(map[string]string),
 		}
 
 		for _, p := range prod.Prices {
@@ -38,15 +60,20 @@ func (c *Client) Import() (*config.BillingConfig, error) {
 			plan.Prices[p.Interval] = config.Price{
 				Amount: int(p.Amount),
 			}
+			planIDs.Prices[p.Interval] = p.ID
 		}
 
 		// Only add plans that have at least one price
 		if len(plan.Prices) > 0 {
-			cfg.Plans = append(cfg.Plans, plan)
+			billing.Plans = append(billing.Plans, plan)
+			provider.Plans[planID] = planIDs
 		}
 	}
 
-	return cfg, nil
+	return &ImportResult{
+		Billing:  billing,
+		Provider: provider,
+	}, nil
 }
 
 // planIDFromProduct extracts plan ID from product metadata or generates from name

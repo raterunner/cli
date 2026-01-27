@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/urfave/cli/v2"
 
@@ -36,6 +37,18 @@ func main() {
 		},
 		Commands: []*cli.Command{
 			{
+				Name:      "init",
+				Usage:     "Initialize a new billing configuration",
+				ArgsUsage: "[path]",
+				Flags: []cli.Flag{
+					&cli.BoolFlag{
+						Name:  "force",
+						Usage: "Overwrite existing files",
+					},
+				},
+				Action: initAction,
+			},
+			{
 				Name:      "validate",
 				Usage:     "Validate a billing or provider configuration file",
 				ArgsUsage: "<file>",
@@ -48,7 +61,7 @@ func main() {
 				},
 				Action: validateAction,
 			},
-				{
+			{
 				Name:      "apply",
 				Usage:     "Sync local billing config to Stripe (creates/updates products and prices)",
 				ArgsUsage: "<billing.yaml>",
@@ -290,6 +303,37 @@ func applyAction(c *cli.Context) error {
 		result.ProductsCreated, result.PricesCreated, result.PricesArchived,
 		result.AddonsCreated, result.CouponsCreated, result.PromosCreated)
 
+	// Save provider file with IDs
+	providerPath := config.ProviderFilePath(filePath, "stripe", env)
+	providerCfg := &config.ProviderConfig{
+		Provider:    "stripe",
+		Environment: env,
+		SyncedAt:    time.Now().UTC().Format(time.RFC3339),
+		Plans:       make(map[string]config.PlanIDs),
+		Addons:      make(map[string]config.ProductIDs),
+		Promotions:  result.PromotionIDs,
+	}
+
+	// Convert sync result IDs to provider config format
+	for planID, planResult := range result.PlanIDs {
+		providerCfg.Plans[planID] = config.PlanIDs{
+			ProductID: planResult.ProductID,
+			Prices:    planResult.Prices,
+		}
+	}
+	for addonID, addonResult := range result.AddonIDs {
+		providerCfg.Addons[addonID] = config.ProductIDs{
+			ProductID: addonResult.ProductID,
+			PriceID:   addonResult.PriceID,
+		}
+	}
+
+	if err := config.SaveProviderFile(providerPath, providerCfg); err != nil {
+		return fmt.Errorf("failed to save provider file: %w", err)
+	}
+
+	fmt.Fprintf(out, "Saved provider IDs to %s\n", providerPath)
+
 	return nil
 }
 
@@ -324,17 +368,24 @@ func importAction(c *cli.Context) error {
 
 	fmt.Fprintf(out, "Importing from Stripe (%s)...\n", env)
 
-	cfg, err := client.Import()
+	result, err := client.Import()
 	if err != nil {
 		return fmt.Errorf("import failed: %w", err)
 	}
 
-	// Write to file
-	if err := config.SaveBillingFile(outputPath, cfg); err != nil {
-		return fmt.Errorf("failed to save file: %w", err)
+	// Write billing config to file
+	if err := config.SaveBillingFile(outputPath, result.Billing); err != nil {
+		return fmt.Errorf("failed to save billing file: %w", err)
 	}
 
-	fmt.Fprintf(out, "Imported %d plans to %s\n", len(cfg.Plans), outputPath)
+	// Write provider config to file
+	providerPath := config.ProviderFilePath(outputPath, "stripe", env)
+	if err := config.SaveProviderFile(providerPath, result.Provider); err != nil {
+		return fmt.Errorf("failed to save provider file: %w", err)
+	}
+
+	fmt.Fprintf(out, "Imported %d plans to %s\n", len(result.Billing.Plans), outputPath)
+	fmt.Fprintf(out, "Saved provider IDs to %s\n", providerPath)
 	return nil
 }
 
@@ -538,5 +589,36 @@ func configPathAction(c *cli.Context) error {
 	}
 
 	fmt.Fprintln(out, config.DefaultSettingsPath())
+	return nil
+}
+
+func initAction(c *cli.Context) error {
+	out := getOutput(c)
+
+	// Get target directory (default to current directory)
+	dir := "."
+	if c.NArg() > 0 {
+		dir = c.Args().First()
+	}
+
+	force := c.Bool("force")
+
+	// Check if files already exist
+	if config.InitFilesExist(dir) && !force {
+		return fmt.Errorf("raterunner/billing.yaml already exists. Use --force to overwrite")
+	}
+
+	// Create files
+	if err := config.CreateInitFiles(dir); err != nil {
+		return fmt.Errorf("failed to create files: %w", err)
+	}
+
+	fmt.Fprintf(out, "Created %s\n", config.InitFilePath(dir))
+	fmt.Fprintln(out, "")
+	fmt.Fprintln(out, "Next steps:")
+	fmt.Fprintln(out, "  1. Edit raterunner/billing.yaml to define your plans")
+	fmt.Fprintln(out, "  2. Run: raterunner validate raterunner/billing.yaml")
+	fmt.Fprintln(out, "  3. Run: raterunner apply --env sandbox raterunner/billing.yaml")
+
 	return nil
 }

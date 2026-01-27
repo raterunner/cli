@@ -1,0 +1,19 @@
+provider: stripe
+environment: sandbox
+synced_at: "2026-01-27T18:34:23Z"
+plans:
+    free:
+        product_id: prod_Ts18GCI8bQb1YB
+        prices:
+            monthly: price_1SuH5lQe3kmrxgoYdo4MDTlb
+    pro:
+        product_id: prod_Ts18YFiu3tDfDc
+        prices:
+            monthly: price_1SuH5lQe3kmrxgoYOjFvNoBt
+            yearly: price_1SuH5mQe3kmrxgoYlSM0oemM
+addons:
+    extra_projects:
+        product_id: prod_Ts18Oh9vytUYTo
+        price_id: price_1SuH5mQe3kmrxgoYu9XTzRMg
+promotions:
+    LAUNCH50: LAUNCH50

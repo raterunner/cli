@@ -27,6 +27,18 @@ func runApp(args ...string) (stdout, stderr string, exitCode int) {
 		},
 		Commands: []*cli.Command{
 			{
+				Name:      "init",
+				Usage:     "Initialize a new billing configuration",
+				ArgsUsage: "[path]",
+				Flags: []cli.Flag{
+					&cli.BoolFlag{
+						Name:  "force",
+						Usage: "Overwrite existing files",
+					},
+				},
+				Action: initAction,
+			},
+			{
 				Name:      "validate",
 				Usage:     "Validate a billing or provider configuration file",
 				ArgsUsage: "<file>",
@@ -447,6 +459,91 @@ func TestQuietFlag_ValidateErrors(t *testing.T) {
 	assertContains(t, stdout, "validation error") // Errors still shown
 }
 
+// --- Init command tests ---
+
+func TestInit_CreatesDirectory(t *testing.T) {
+	// Create a temp directory
+	tmpDir, err := os.MkdirTemp("", "raterunner-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	stdout, _, exitCode := runApp("init", tmpDir)
+
+	assertExitCode(t, 0, exitCode)
+	assertContains(t, stdout, "Created")
+	assertContains(t, stdout, "billing.yaml")
+
+	// Verify file was created
+	billingPath := tmpDir + "/raterunner/billing.yaml"
+	if _, err := os.Stat(billingPath); os.IsNotExist(err) {
+		t.Errorf("expected billing.yaml to be created at %s", billingPath)
+	}
+}
+
+func TestInit_RefusesOverwrite(t *testing.T) {
+	// Create a temp directory with existing billing.yaml
+	tmpDir, err := os.MkdirTemp("", "raterunner-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create existing file
+	raterunnerDir := tmpDir + "/raterunner"
+	if err := os.MkdirAll(raterunnerDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(raterunnerDir+"/billing.yaml", []byte("existing"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, _, exitCode := runApp("init", tmpDir)
+
+	assertExitCode(t, 1, exitCode)
+	assertContains(t, stdout, "already exists")
+}
+
+func TestInit_ForceOverwrite(t *testing.T) {
+	// Create a temp directory with existing billing.yaml
+	tmpDir, err := os.MkdirTemp("", "raterunner-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create existing file
+	raterunnerDir := tmpDir + "/raterunner"
+	if err := os.MkdirAll(raterunnerDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(raterunnerDir+"/billing.yaml", []byte("existing"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, _, exitCode := runApp("init", "--force", tmpDir)
+
+	assertExitCode(t, 0, exitCode)
+	assertContains(t, stdout, "Created")
+
+	// Verify file was overwritten (content should be different)
+	content, err := os.ReadFile(raterunnerDir + "/billing.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(content) == "existing" {
+		t.Error("expected file to be overwritten")
+	}
+}
+
+func TestValidate_ProviderSandboxFile(t *testing.T) {
+	stdout, _, exitCode := runApp("validate", "testdata/valid/stripe_sandbox.yaml")
+
+	assertExitCode(t, 0, exitCode)
+	assertContains(t, stdout, "is valid")
+}
+
 // --- Test helpers ---
 
 func assertExitCode(t *testing.T, expected, actual int) {
@@ -472,6 +569,7 @@ func TestTestdataFilesExist(t *testing.T) {
 		"testdata/valid/billing_minimal.json",
 		"testdata/valid/billing_optional_field.yaml",
 		"testdata/valid/provider_stripe.yaml",
+		"testdata/valid/stripe_sandbox.yaml",
 		"testdata/invalid/billing_missing_name.yaml",
 		"testdata/invalid/billing_bad_version.yaml",
 		"testdata/invalid/billing_invalid_plan_id.yaml",

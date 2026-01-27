@@ -1,0 +1,22 @@
+# Test case: Valid Stripe provider configuration (sandbox)
+# Expects: validation passes, auto-detected as provider type
+provider: stripe
+environment: sandbox
+synced_at: "2024-01-15T10:30:00Z"
+plans:
+  free:
+    product_id: prod_free123
+    prices:
+      monthly: price_freemonth
+      yearly: price_freeyear
+  pro:
+    product_id: prod_pro456
+    prices:
+      monthly: price_promonth
+      yearly: price_proyear
+addons:
+  extra_storage:
+    product_id: prod_storage789
+    price_id: price_storage
+promotions:
+  LAUNCH20: coupon_launch20

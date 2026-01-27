@@ -14,18 +14,39 @@ import (
 
 // SyncResult contains the results of the sync operation
 type SyncResult struct {
-	ProductsCreated  int
-	PricesCreated    int
-	PricesArchived   int
-	AddonsCreated    int
-	CouponsCreated   int
-	PromosCreated    int
-	Warnings         []string
+	ProductsCreated int
+	PricesCreated   int
+	PricesArchived  int
+	AddonsCreated   int
+	CouponsCreated  int
+	PromosCreated   int
+	Warnings        []string
+
+	// ID tracking for provider file generation
+	PlanIDs      map[string]PlanIDResult
+	AddonIDs     map[string]AddonIDResult
+	PromotionIDs map[string]string
+}
+
+// PlanIDResult contains Stripe IDs for a synced plan
+type PlanIDResult struct {
+	ProductID string
+	Prices    map[string]string // interval -> price_id
+}
+
+// AddonIDResult contains Stripe IDs for a synced addon
+type AddonIDResult struct {
+	ProductID string
+	PriceID   string
 }
 
 // Sync creates or updates all plans from a billing config in Stripe
 func (c *Client) Sync(cfg *config.BillingConfig) (*SyncResult, error) {
-	result := &SyncResult{}
+	result := &SyncResult{
+		PlanIDs:      make(map[string]PlanIDResult),
+		AddonIDs:     make(map[string]AddonIDResult),
+		PromotionIDs: make(map[string]string),
+	}
 
 	// Fetch existing products once
 	existingProducts, err := c.FetchProductsWithPrices()
@@ -62,6 +83,11 @@ func (c *Client) syncPlan(plan config.Plan, existingProducts []Product, result *
 
 	var productID string
 	var existingPrices []ProductPrice
+
+	// Initialize plan ID tracking
+	planIDResult := PlanIDResult{
+		Prices: make(map[string]string),
+	}
 
 	if existingProduct != nil {
 		productID = existingProduct.ID
@@ -122,25 +148,36 @@ func (c *Client) syncPlan(plan config.Plan, existingProducts []Product, result *
 		result.ProductsCreated++
 	}
 
+	// Record product ID
+	planIDResult.ProductID = productID
+
 	// Sync prices
 	for interval, localPrice := range plan.Prices {
-		if err := c.syncPriceAdvanced(productID, plan.ID, interval, localPrice, plan.TrialDays, existingPrices, result); err != nil {
+		priceID, err := c.syncPriceAdvanced(productID, plan.ID, interval, localPrice, plan.TrialDays, existingPrices, result)
+		if err != nil {
 			return err
 		}
+		if priceID != "" {
+			planIDResult.Prices[interval] = priceID
+		}
 	}
+
+	// Record plan IDs
+	result.PlanIDs[plan.ID] = planIDResult
 
 	return nil
 }
 
 // syncPriceAdvanced creates prices supporting flat, per_unit, and tiered pricing
-func (c *Client) syncPriceAdvanced(productID, planID, interval string, localPrice config.Price, trialDays int, existingPrices []ProductPrice, result *SyncResult) error {
+// Returns the price ID (either existing or newly created)
+func (c *Client) syncPriceAdvanced(productID, planID, interval string, localPrice config.Price, trialDays int, existingPrices []ProductPrice, result *SyncResult) (string, error) {
 	priceType := localPrice.PriceType()
 
 	// For flat prices, check if exact price already exists
 	if priceType == "flat" {
 		for _, p := range existingPrices {
 			if p.Interval == interval && p.Amount == int64(localPrice.Amount) && p.Active {
-				return nil // Price already exists
+				return p.ID, nil // Price already exists, return existing ID
 			}
 		}
 
@@ -155,7 +192,7 @@ func (c *Client) syncPriceAdvanced(productID, planID, interval string, localPric
 					Active: stripe.Bool(false),
 				})
 				if err != nil {
-					return fmt.Errorf("failed to archive old price %s: %w", p.ID, err)
+					return "", fmt.Errorf("failed to archive old price %s: %w", p.ID, err)
 				}
 				result.PricesArchived++
 			}
@@ -223,7 +260,7 @@ func (c *Client) syncPriceAdvanced(productID, planID, interval string, localPric
 		case "yearly":
 			recurring.Interval = stripe.String(string(stripe.PriceRecurringIntervalYear))
 		default:
-			return fmt.Errorf("unsupported interval: %s", interval)
+			return "", fmt.Errorf("unsupported interval: %s", interval)
 		}
 
 		// Add trial period if specified
@@ -240,13 +277,13 @@ func (c *Client) syncPriceAdvanced(productID, planID, interval string, localPric
 		params.Recurring = recurring
 	}
 
-	_, err := price.New(params)
+	newPrice, err := price.New(params)
 	if err != nil {
-		return fmt.Errorf("failed to create %s price: %w", priceType, err)
+		return "", fmt.Errorf("failed to create %s price: %w", priceType, err)
 	}
 	result.PricesCreated++
 
-	return nil
+	return newPrice.ID, nil
 }
 
 func (c *Client) syncAddon(addon config.Addon, existingProducts []Product, result *SyncResult) error {
@@ -254,12 +291,18 @@ func (c *Client) syncAddon(addon config.Addon, existingProducts []Product, resul
 	existingProduct := MatchProduct(existingProducts, addon.ID, addon.Name)
 
 	var productID string
+	var priceID string
 
 	if existingProduct != nil {
 		productID = existingProduct.ID
 		// Check if one-time price with correct amount exists
 		for _, p := range existingProduct.Prices {
 			if p.Interval == "" && p.Amount == int64(addon.Price.Amount) && p.Active {
+				// Record existing IDs and return
+				result.AddonIDs[addon.ID] = AddonIDResult{
+					ProductID: productID,
+					PriceID:   p.ID,
+				}
 				return nil // Addon already exists with correct price
 			}
 		}
@@ -288,11 +331,18 @@ func (c *Client) syncAddon(addon config.Addon, existingProducts []Product, resul
 		Currency:   stripe.String("usd"),
 	}
 
-	_, err := price.New(priceParams)
+	newPrice, err := price.New(priceParams)
 	if err != nil {
 		return fmt.Errorf("failed to create addon price: %w", err)
 	}
+	priceID = newPrice.ID
 	result.PricesCreated++
+
+	// Record addon IDs
+	result.AddonIDs[addon.ID] = AddonIDResult{
+		ProductID: productID,
+		PriceID:   priceID,
+	}
 
 	return nil
 }
@@ -332,12 +382,14 @@ func (c *Client) syncPromotion(promo config.Promotion, result *SyncResult) error
 		couponParams.MaxRedemptions = stripe.Int64(int64(promo.MaxUses))
 	}
 
-	_, err := coupon.New(couponParams)
+	newCoupon, err := coupon.New(couponParams)
 	if err != nil {
 		// Check if coupon already exists
 		if stripeErr, ok := err.(*stripe.Error); ok && stripeErr.Code == stripe.ErrorCodeResourceAlreadyExists {
 			result.Warnings = append(result.Warnings,
 				fmt.Sprintf("coupon '%s' already exists, skipping", promo.Code))
+			// Record coupon ID (same as code since we use code as ID)
+			result.PromotionIDs[promo.Code] = promo.Code
 			return nil
 		}
 		return fmt.Errorf("failed to create coupon: %w", err)
@@ -362,11 +414,16 @@ func (c *Client) syncPromotion(promo config.Promotion, result *SyncResult) error
 		if stripeErr, ok := err.(*stripe.Error); ok && stripeErr.Code == stripe.ErrorCodeResourceAlreadyExists {
 			result.Warnings = append(result.Warnings,
 				fmt.Sprintf("promotion code '%s' already exists, skipping", promo.Code))
+			// Record coupon ID
+			result.PromotionIDs[promo.Code] = newCoupon.ID
 			return nil
 		}
 		return fmt.Errorf("failed to create promotion code: %w", err)
 	}
 	result.PromosCreated++
+
+	// Record coupon ID
+	result.PromotionIDs[promo.Code] = newCoupon.ID
 
 	return nil
 }
