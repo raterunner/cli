@@ -32,6 +32,7 @@ type Plan struct {
 	Description string           `yaml:"description,omitempty" json:"description,omitempty"`
 	Headline    string           `yaml:"headline,omitempty" json:"headline,omitempty"`
 	Type        string           `yaml:"type,omitempty" json:"type,omitempty"` // personal, team, enterprise
+	Providers   []string         `yaml:"providers,omitempty" json:"providers,omitempty"`
 	Public      *bool            `yaml:"public,omitempty" json:"public,omitempty"`
 	Default     bool             `yaml:"default,omitempty" json:"default,omitempty"`
 	TrialDays   int              `yaml:"trial_days,omitempty" json:"trial_days,omitempty"`
@@ -40,6 +41,24 @@ type Plan struct {
 	Features    []string         `yaml:"features,omitempty" json:"features,omitempty"`
 	UpgradesTo  []string         `yaml:"upgrades_to,omitempty" json:"upgrades_to,omitempty"`
 	Metadata    map[string]any   `yaml:"metadata,omitempty" json:"metadata,omitempty"`
+}
+
+// EffectiveProviders returns the plan's providers, falling back to global providers
+func (p *Plan) EffectiveProviders(globalProviders []string) []string {
+	if len(p.Providers) > 0 {
+		return p.Providers
+	}
+	return globalProviders
+}
+
+// HasProvider checks if this plan targets the given provider
+func (p *Plan) HasProvider(provider string, globalProviders []string) bool {
+	for _, pr := range p.EffectiveProviders(globalProviders) {
+		if pr == provider {
+			return true
+		}
+	}
+	return false
 }
 
 // Price represents a price point for a plan (supports flat, per_unit, and tiered)

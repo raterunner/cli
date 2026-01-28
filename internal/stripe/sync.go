@@ -54,8 +54,11 @@ func (c *Client) Sync(cfg *config.BillingConfig) (*SyncResult, error) {
 		return nil, fmt.Errorf("failed to fetch existing products: %w", err)
 	}
 
-	// Sync plans
+	// Sync plans (skip plans not targeting Stripe)
 	for _, plan := range cfg.Plans {
+		if !plan.HasProvider("stripe", cfg.Providers) {
+			continue
+		}
 		if err := c.syncPlan(plan, existingProducts, result); err != nil {
 			return result, fmt.Errorf("failed to sync plan '%s': %w", plan.ID, err)
 		}

@@ -18,6 +18,10 @@ func Compare(cfg *config.BillingConfig, products []stripe.Product, env string) *
 	}
 
 	for _, plan := range cfg.Plans {
+		// Skip plans not targeting Stripe
+		if !plan.HasProvider("stripe", cfg.Providers) {
+			continue
+		}
 		planDiff := comparePlan(plan, products)
 		result.Plans = append(result.Plans, planDiff)
 

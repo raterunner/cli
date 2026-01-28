@@ -12,7 +12,7 @@
 
     "providers": {
       "type": "array",
-      "description": "Payment providers to sync with. CLI will error if provider is not supported.",
+      "description": "Default payment providers for all plans. Individual plans can override with their own providers list.",
       "items": {
         "type": "string",
         "enum": ["stripe", "paddle", "chargebee"]
@@ -74,16 +74,19 @@
           "pattern": "^[a-z][a-z0-9_]*$",
           "description": "Unique identifier (snake_case)"
         },
-        "version": {
-          "type": "integer",
-          "minimum": 1,
-          "default": 1,
-          "description": "Plan version for grandfathering existing subscribers"
-        },
         "name": { "type": "string" },
         "description": { "type": "string" },
         "headline": { "type": "string", "description": "Short tagline for pricing page" },
         "type": { "enum": ["personal", "team", "enterprise"] },
+        "providers": {
+          "type": "array",
+          "description": "Override global providers list. If omitted, syncs to all providers defined at root level.",
+          "items": {
+            "type": "string",
+            "enum": ["stripe", "paddle", "chargebee"]
+          },
+          "uniqueItems": true
+        },
         "public": { "type": "boolean", "default": true },
         "default": { "type": "boolean", "default": false },
         "trial_days": { "type": "integer", "minimum": 0 },

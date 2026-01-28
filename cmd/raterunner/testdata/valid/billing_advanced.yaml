@@ -65,12 +65,14 @@ plans:
     metadata:
       recommended: "true"
 
-  # Enterprise - per-seat pricing (usage-based)
+  # Enterprise - per-seat pricing (usage-based), Stripe-only
   - id: enterprise
     name: Enterprise Plan
     description: For large organizations with custom needs
     headline: Unlimited scale
     type: enterprise
+    providers:
+      - stripe
     prices:
       monthly:
         per_unit: 1500
