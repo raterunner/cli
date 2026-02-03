@@ -41,7 +41,7 @@
           "type": "object",
           "description": "Billing interval -> price ID",
           "additionalProperties": { "type": "string" },
-          "propertyNames": { "enum": ["monthly", "quarterly", "yearly"] }
+          "propertyNames": { "enum": ["monthly", "quarterly", "yearly", "one_time"] }
         }
       }
     },

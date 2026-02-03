@@ -27,20 +27,26 @@ type Entitlement struct {
 
 // Plan represents a pricing plan
 type Plan struct {
-	ID          string           `yaml:"id" json:"id"`
-	Name        string           `yaml:"name" json:"name"`
-	Description string           `yaml:"description,omitempty" json:"description,omitempty"`
-	Headline    string           `yaml:"headline,omitempty" json:"headline,omitempty"`
-	Type        string           `yaml:"type,omitempty" json:"type,omitempty"` // personal, team, enterprise
-	Providers   []string         `yaml:"providers,omitempty" json:"providers,omitempty"`
-	Public      *bool            `yaml:"public,omitempty" json:"public,omitempty"`
-	Default     bool             `yaml:"default,omitempty" json:"default,omitempty"`
-	TrialDays   int              `yaml:"trial_days,omitempty" json:"trial_days,omitempty"`
-	Prices      map[string]Price `yaml:"prices" json:"prices"`
-	Limits      map[string]any   `yaml:"limits,omitempty" json:"limits,omitempty"`
-	Features    []string         `yaml:"features,omitempty" json:"features,omitempty"`
-	UpgradesTo  []string         `yaml:"upgrades_to,omitempty" json:"upgrades_to,omitempty"`
-	Metadata    map[string]any   `yaml:"metadata,omitempty" json:"metadata,omitempty"`
+	ID           string           `yaml:"id" json:"id"`
+	Name         string           `yaml:"name" json:"name"`
+	Description  string           `yaml:"description,omitempty" json:"description,omitempty"`
+	Headline     string           `yaml:"headline,omitempty" json:"headline,omitempty"`
+	Type         string           `yaml:"type,omitempty" json:"type,omitempty"`                   // personal, team, enterprise
+	BillingModel string           `yaml:"billing_model,omitempty" json:"billing_model,omitempty"` // subscription (default), one_time
+	Providers    []string         `yaml:"providers,omitempty" json:"providers,omitempty"`
+	Public       *bool            `yaml:"public,omitempty" json:"public,omitempty"`
+	Default      bool             `yaml:"default,omitempty" json:"default,omitempty"`
+	TrialDays    int              `yaml:"trial_days,omitempty" json:"trial_days,omitempty"`
+	Prices       map[string]Price `yaml:"prices" json:"prices"`
+	Limits       map[string]any   `yaml:"limits,omitempty" json:"limits,omitempty"`
+	Features     []string         `yaml:"features,omitempty" json:"features,omitempty"`
+	UpgradesTo   []string         `yaml:"upgrades_to,omitempty" json:"upgrades_to,omitempty"`
+	Metadata     map[string]any   `yaml:"metadata,omitempty" json:"metadata,omitempty"`
+}
+
+// IsOneTime returns true if this plan uses one-time billing (e.g., lifetime deal)
+func (p *Plan) IsOneTime() bool {
+	return p.BillingModel == "one_time"
 }
 
 // EffectiveProviders returns the plan's providers, falling back to global providers

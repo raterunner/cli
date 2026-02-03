@@ -50,17 +50,35 @@ func (c *Client) Import() (*ImportResult, error) {
 			Prices:    make(map[string]string),
 		}
 
+		hasRecurring := false
+		hasOneTime := false
+
 		for _, p := range prod.Prices {
 			if !p.Active {
 				continue
 			}
 			if p.Interval == "" {
-				continue // Skip one-time prices for now
+				// One-time price
+				plan.Prices["one_time"] = config.Price{
+					Amount: int(p.Amount),
+				}
+				planIDs.Prices["one_time"] = p.ID
+				hasOneTime = true
+			} else {
+				// Recurring price
+				plan.Prices[p.Interval] = config.Price{
+					Amount: int(p.Amount),
+				}
+				planIDs.Prices[p.Interval] = p.ID
+				hasRecurring = true
 			}
-			plan.Prices[p.Interval] = config.Price{
-				Amount: int(p.Amount),
-			}
-			planIDs.Prices[p.Interval] = p.ID
+		}
+
+		// Set billing_model: prefer metadata, fallback to price detection
+		if prod.BillingModel != "" {
+			plan.BillingModel = prod.BillingModel
+		} else if hasOneTime && !hasRecurring {
+			plan.BillingModel = "one_time"
 		}
 
 		// Only add plans that have at least one price

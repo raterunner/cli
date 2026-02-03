@@ -11,11 +11,12 @@ import (
 
 // Product represents a Stripe product with its prices
 type Product struct {
-	ID       string
-	Name     string
-	PlanCode string // from metadata
-	Active   bool
-	Prices   []ProductPrice
+	ID           string
+	Name         string
+	PlanCode     string // from metadata
+	BillingModel string // from metadata: "subscription" or "one_time"
+	Active       bool
+	Prices       []ProductPrice
 }
 
 // ProductPrice represents a Stripe price
@@ -48,6 +49,11 @@ func (c *Client) FetchProducts() ([]Product, error) {
 		// Check for plan_code in metadata
 		if planCode, ok := p.Metadata["plan_code"]; ok {
 			prod.PlanCode = planCode
+		}
+
+		// Check for billing_model in metadata
+		if billingModel, ok := p.Metadata["billing_model"]; ok {
+			prod.BillingModel = billingModel
 		}
 
 		products = append(products, prod)

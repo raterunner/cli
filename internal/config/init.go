@@ -96,6 +96,25 @@ plans:
       - Dedicated support
       - Custom integrations
       - SLA guarantee
+
+  # Example: One-time payment (lifetime deal)
+  # - id: lifetime
+  #   name: Lifetime Deal
+  #   description: Pay once, use forever
+  #   headline: Limited time offer
+  #   type: personal
+  #   billing_model: one_time
+  #   public: true
+  #   prices:
+  #     one_time:
+  #       amount: 29900
+  #   limits:
+  #     projects: 50
+  #     api_calls: 100000
+  #     support: true
+  #   features:
+  #     - Lifetime access
+  #     - All future updates
 `
 
 // CreateInitFiles creates the raterunner/billing.yaml file in the specified directory

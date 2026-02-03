@@ -78,6 +78,11 @@
         "description": { "type": "string" },
         "headline": { "type": "string", "description": "Short tagline for pricing page" },
         "type": { "enum": ["personal", "team", "enterprise"] },
+        "billing_model": {
+          "enum": ["subscription", "one_time"],
+          "default": "subscription",
+          "description": "subscription = recurring payments, one_time = single purchase (lifetime, etc.)"
+        },
         "providers": {
           "type": "array",
           "description": "Override global providers list. If omitted, syncs to all providers defined at root level.",
@@ -93,7 +98,7 @@
         "prices": {
           "type": "object",
           "additionalProperties": { "$ref": "#/$defs/Price" },
-          "propertyNames": { "enum": ["monthly", "quarterly", "yearly"] }
+          "propertyNames": { "enum": ["monthly", "quarterly", "yearly", "one_time"] }
         },
         "limits": { "$ref": "#/$defs/Limits" },
         "features": {
@@ -109,6 +114,20 @@
         "metadata": {
           "type": "object",
           "additionalProperties": true
+        }
+      },
+      "if": {
+        "properties": { "billing_model": { "const": "one_time" } },
+        "required": ["billing_model"]
+      },
+      "then": {
+        "properties": {
+          "prices": { "propertyNames": { "enum": ["one_time"] } }
+        }
+      },
+      "else": {
+        "properties": {
+          "prices": { "propertyNames": { "enum": ["monthly", "quarterly", "yearly"] } }
         }
       }
     },

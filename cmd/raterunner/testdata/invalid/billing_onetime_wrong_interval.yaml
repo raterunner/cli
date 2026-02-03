@@ -1,0 +1,19 @@
+# Test case: One-time billing plan with wrong price interval
+# Expects: validation error - one_time plans can only have one_time prices
+version: 1
+
+providers:
+  - stripe
+
+entitlements:
+  projects:
+    type: int
+
+plans:
+  - id: lifetime
+    name: Lifetime Plan
+    billing_model: one_time
+    prices:
+      monthly: { amount: 9900 }
+    limits:
+      projects: 10

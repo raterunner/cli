@@ -194,6 +194,14 @@ func TestValidate_ValidBillingOptionalField(t *testing.T) {
 	assertContains(t, stdout, "is valid")
 }
 
+func TestValidate_ValidBillingOneTime(t *testing.T) {
+	// One-time billing plan (lifetime deal)
+	stdout, _, exitCode := runApp("validate", "testdata/valid/billing_onetime.yaml")
+
+	assertExitCode(t, 0, exitCode)
+	assertContains(t, stdout, "is valid")
+}
+
 // --- Invalid files: schema errors ---
 
 func TestValidate_MissingRequiredField(t *testing.T) {
@@ -227,6 +235,14 @@ func TestValidate_InvalidProviderFile(t *testing.T) {
 
 func TestValidate_UnsupportedProviderInBilling(t *testing.T) {
 	stdout, _, exitCode := runApp("validate", "testdata/invalid/billing_unsupported_provider.yaml")
+
+	assertExitCode(t, 1, exitCode)
+	assertContains(t, stdout, "validation error")
+}
+
+func TestValidate_OneTimeWrongInterval(t *testing.T) {
+	// One-time plan with monthly price should fail
+	stdout, _, exitCode := runApp("validate", "testdata/invalid/billing_onetime_wrong_interval.yaml")
 
 	assertExitCode(t, 1, exitCode)
 	assertContains(t, stdout, "validation error")
@@ -568,6 +584,7 @@ func TestTestdataFilesExist(t *testing.T) {
 		"testdata/valid/billing_full.yaml",
 		"testdata/valid/billing_minimal.json",
 		"testdata/valid/billing_optional_field.yaml",
+		"testdata/valid/billing_onetime.yaml",
 		"testdata/valid/provider_stripe.yaml",
 		"testdata/valid/stripe_sandbox.yaml",
 		"testdata/invalid/billing_missing_name.yaml",
@@ -576,6 +593,7 @@ func TestTestdataFilesExist(t *testing.T) {
 		"testdata/invalid/billing_undefined_entitlement.yaml",
 		"testdata/invalid/billing_undefined_entitlement_addon.yaml",
 		"testdata/invalid/billing_unsupported_provider.yaml",
+		"testdata/invalid/billing_onetime_wrong_interval.yaml",
 		"testdata/invalid/provider_unknown.yaml",
 		"testdata/errors/malformed.yaml",
 		"testdata/apply/billing_paddle.yaml",

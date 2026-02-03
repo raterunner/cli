@@ -126,6 +126,11 @@ func (c *Client) syncPlan(plan config.Plan, existingProducts []Product, result *
 			params.Metadata["plan_type"] = plan.Type
 		}
 
+		// Add billing model to metadata
+		if plan.BillingModel != "" {
+			params.Metadata["billing_model"] = plan.BillingModel
+		}
+
 		// Add marketing features
 		if len(plan.Features) > 0 {
 			params.MarketingFeatures = make([]*stripe.ProductMarketingFeatureParams, len(plan.Features))
